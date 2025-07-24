@@ -1,5 +1,5 @@
 from django.db import models
-from mongoengine import Document, StringField, BooleanField, DateTimeField
+from mongoengine import Document, StringField, IntField, BooleanField, DateTimeField, ListField
 import datetime
 
 # Person: MongoDB'de saklanacak kişi bilgisi modeli
@@ -10,11 +10,10 @@ class Person(Document):
 # User: Platform kullanıcısı modeli
 class User(Document):
     email = StringField(required=True, unique=True)  # Kullanıcı e-posta adresi
+    password_hash = StringField(required=True)  # Hashlenmiş şifre
     full_name = StringField()  # Kullanıcının tam adı
-    is_developer = BooleanField(default=False)  # Geliştirici rolü
-    is_investor = BooleanField(default=False)  # Yatırımcı rolü
-    linkedin_connected = BooleanField(default=False)  # LinkedIn bağlantı durumu
-    github_connected = BooleanField(default=False)  # GitHub bağlantı durumu
-    card_verified = BooleanField(default=False)  # Kart doğrulama durumu
-    created_at = DateTimeField(default=datetime.datetime.utcnow)  # Oluşturulma zamanı
-    last_login = DateTimeField()  # Son giriş zamanı
+    user_type = ListField(StringField(choices=["developer", "entrepreneur", "investor"]))  # Kullanıcı rolleri
+    github_verified = BooleanField(default=False)  # GitHub doğrulama durumu
+    linkedin_verified = BooleanField(default=False)  # LinkedIn doğrulama durumu
+    can_invest = BooleanField(default=False)  # Yatırım yapabilir mi?
+    created_at = DateTimeField(default=datetime.datetime.utcnow)  # Kayıt tarihi

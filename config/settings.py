@@ -50,7 +50,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'btkproject.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
@@ -67,7 +67,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'btkproject.wsgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
@@ -83,9 +83,8 @@ WSGI_APPLICATION = 'btkproject.wsgi.application'
 # MongoDB bağlantısı için mongoengine ayarları
 from mongoengine import connect
 MONGODB_NAME = 'btkdb'
-MONGODB_HOST = 'localhost'
-MONGODB_PORT = 27017
-connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
+MONGODB_HOST = 'mongodb+srv://halitcanemir06:6WSY86zmwldt9Nsv@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0'
+connect(db=MONGODB_NAME, host=MONGODB_HOST)
 
 
 # Password validation
