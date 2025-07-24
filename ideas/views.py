@@ -50,7 +50,7 @@ def get_user_from_jwt(request):
 @csrf_exempt
 # Fikir gönderme endpointi
 # POST /ideas
-# Body: {"title": ..., "description": ..., ...}
+# Body: {"title": ..., "description": ..., "license_accepted": true, ...}
 # Response: {"status": "ok", "idea": {...}}
 def submit_idea(request):
     if request.method != 'POST':
@@ -66,10 +66,14 @@ def submit_idea(request):
         problem = data.get('problem')
         solution = data.get('solution')
         estimated_cost = data.get('estimated_cost')
+        license_accepted = data.get('license_accepted')
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
     if not title:
         return JsonResponse({'status': 'error', 'message': 'Başlık zorunlu'})
+    if not license_accepted:
+        return JsonResponse({'status': 'error', 'message': 'Fikrin kaydedilebilmesi için lisans sözleşmesi kabul edilmelidir.'}, status=400)
+    now = datetime.utcnow()
     # Fikir kaydı
     idea = Idea(
         title=title,
@@ -79,20 +83,27 @@ def submit_idea(request):
         solution=solution,
         estimated_cost=estimated_cost,
         owner_id=user,
-        status='pending',
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_by=user,
+        license_accepted=True,
+        license_accepted_at=now,
+        owner_share_percent=10,
+        status='pending_admin_approval',
+        created_at=now,
+        updated_at=now
     )
     idea.save()
-    # Kullanıcıya idea_owner rolü ekle (yoksa)
-    if 'idea_owner' not in user.user_type:
-        user.user_type.append('idea_owner')
+    # Kullanıcıya fikir_sahibi rolü ekle (yoksa)
+    if 'fikir_sahibi' not in user.user_type:
+        user.user_type.append('fikir_sahibi')
         user.save()
     idea_data = {
         'id': str(idea.id),
         'title': idea.title,
         'status': idea.status,
         'owner_id': str(user.id),
+        'license_accepted': idea.license_accepted,
+        'license_accepted_at': str(idea.license_accepted_at),
+        'owner_share_percent': idea.owner_share_percent,
         'created_at': str(idea.created_at)
     }
     return JsonResponse({'status': 'ok', 'idea': idea_data})

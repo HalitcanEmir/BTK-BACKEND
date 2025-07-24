@@ -1,4 +1,4 @@
-from mongoengine import Document, StringField, ReferenceField, DateTimeField, IntField
+from mongoengine import Document, StringField, ReferenceField, DateTimeField, IntField, BooleanField
 import datetime
 from users.models import User
 
@@ -11,6 +11,10 @@ class Idea(Document):
     solution = StringField()
     estimated_cost = IntField()
     owner_id = ReferenceField(User, required=True)
-    status = StringField(default='pending', choices=['pending', 'approved', 'rejected'])
+    created_by = ReferenceField(User, required=True)
+    license_accepted = BooleanField(required=True)
+    license_accepted_at = DateTimeField()
+    owner_share_percent = IntField(default=10)
+    status = StringField(default='pending_admin_approval', choices=['pending', 'approved', 'rejected', 'pending_admin_approval'])
     created_at = DateTimeField(default=datetime.datetime.utcnow)
     updated_at = DateTimeField(default=datetime.datetime.utcnow)
