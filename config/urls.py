@@ -24,5 +24,6 @@ urlpatterns = [
     path('list/', list_people),
     path('api/auth/request-login', request_login),
     path('api/auth/verify-login', verify_login),
-    path('api/auth/', include('users.urls')),  # users app endpointlerini ekle
+    path('api/auth/', include('users.urls')),
+    path('ideas/', include('ideas.urls')),  # ideas app endpointlerini ekle
 ]
