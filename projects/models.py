@@ -20,6 +20,10 @@ class InvestmentOffer(EmbeddedDocument):
     responded_at = DateTimeField()
     response_note = StringField()
 
+class ProjectLike(EmbeddedDocument):
+    user = ReferenceField('User', required=True)
+    liked_at = DateTimeField(required=True)
+
 class Project(Document):
     title = StringField(required=True)
     description = StringField()
@@ -33,6 +37,7 @@ class Project(Document):
     team_members = ListField(ReferenceField('User'))
     completion_requests = ListField(EmbeddedDocumentField(ProjectCompletionRequest))
     investment_offers = ListField(EmbeddedDocumentField(InvestmentOffer))
+    likes = ListField(EmbeddedDocumentField(ProjectLike))
     # Yeni alanlar
     target_amount = FloatField(default=0)
     current_amount = FloatField(default=0)

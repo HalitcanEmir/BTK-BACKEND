@@ -8,6 +8,7 @@ from users.models import User
 from ideas.views import get_user_from_jwt
 import json
 from .models import InvestmentOffer
+from .models import ProjectLike
 
 # Create your views here.
 
@@ -66,7 +67,16 @@ def project_detail(request, id):
         'can_join': bool(is_developer and not is_team_member and not project.is_completed),
         'can_manage': bool(is_project_owner or is_admin_user),
         'can_chat': bool(is_team_member or is_project_owner or is_admin_user),
+        'like_count': len(project.likes) if project.likes else 0,
+        'user_liked': False,  # Varsayılan değer
     }
+    
+    # Kullanıcının projeyi beğenip beğenmediğini kontrol et
+    if user and project.likes:
+        for like in project.likes:
+            if like.user == user:
+                project_data['user_liked'] = True
+                break
     
     # Takım üyeleri
     if project.team_members:
@@ -573,3 +583,108 @@ def reject_investment_offer(request, project_id, offer_id):
             return JsonResponse({'status': 'error', 'message': 'Teklif bulunamadı'}, status=404)
     except ValueError:
         return JsonResponse({'status': 'error', 'message': 'Geçersiz teklif ID'}, status=400)
+
+# GET /api/leaderboard
+# Açıklama: En çok beğeni alan projeleri sıralı şekilde getirir
+@csrf_exempt
+def leaderboard(request):
+    # Tüm onaylanmış projeleri al ve beğeni sayısına göre sırala
+    projects = Project.objects(is_approved=True).order_by('-likes__count')
+    
+    leaderboard_data = []
+    for i, project in enumerate(projects, 1):
+        like_count = len(project.likes) if project.likes else 0
+        
+        project_data = {
+            'rank': i,
+            'project_id': str(project.id),
+            'title': project.title,
+            'description': getattr(project, 'description', ''),
+            'category': getattr(project, 'category', ''),
+            'like_count': like_count,
+            'is_completed': project.is_completed,
+            'status': project.status,
+            'created_at': project.created_at.isoformat() if project.created_at else None,
+            'team_size': len(project.team_members) if project.team_members else 0,
+            'current_amount': getattr(project, 'current_amount', 0),
+            'target_amount': getattr(project, 'target_amount', 0),
+        }
+        
+        # İlk 3 proje için özel rozetler
+        if i <= 3:
+            badges = ['🥇', '🥈', '🥉']
+            project_data['badge'] = badges[i-1]
+        
+        # Proje sahibi bilgisi
+        if project.project_owner:
+            project_data['project_owner'] = {
+                'name': project.project_owner.full_name,
+                'id': str(project.project_owner.id)
+            }
+        
+        leaderboard_data.append(project_data)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'leaderboard': leaderboard_data,
+        'total_projects': len(leaderboard_data)
+    })
+
+# POST /api/projects/<id>/like
+# Açıklama: Projeyi beğenir veya beğenmekten vazgeçer
+@csrf_exempt
+def toggle_project_like(request, id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız'}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz proje ID'}, status=400)
+    
+    if not project:
+        return JsonResponse({'status': 'error', 'message': 'Proje bulunamadı'}, status=404)
+    
+    # Kullanıcının daha önce beğenip beğenmediğini kontrol et
+    user_liked = False
+    like_index = -1
+    
+    if project.likes:
+        for i, like in enumerate(project.likes):
+            if like.user == user:
+                user_liked = True
+                like_index = i
+                break
+    
+    if user_liked:
+        # Beğenmekten vazgeç
+        project.likes.pop(like_index)
+        project.save()
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Proje beğenmekten vazgeçildi',
+            'liked': False,
+            'like_count': len(project.likes)
+        })
+    else:
+        # Beğen
+        new_like = ProjectLike(
+            user=user,
+            liked_at=datetime.utcnow()
+        )
+        
+        if not project.likes:
+            project.likes = []
+        project.likes.append(new_like)
+        project.save()
+        
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Proje beğenildi',
+            'liked': True,
+            'like_count': len(project.likes)
+        })
