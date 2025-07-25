@@ -12,14 +12,47 @@ from datetime import datetime
 
 # Fikirler Sayfası
 # GET /ideas
-# Açıklama: Onaylanmış fikirleri listeler
+# Açıklama: Onaylanmış fikirleri listeler, filtreleme, arama, sıralama ve pagination destekler
 @csrf_exempt
 def ideas_list(request):
     user = get_user_from_jwt(request)
     if not user:
         return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
+    # Query parametreleri
+    page = int(request.GET.get('page', 1))
+    limit = int(request.GET.get('limit', 10))
+    q = request.GET.get('q')
+    category = request.GET.get('category')
+    sort = request.GET.get('sort', 'created_at')
+
     # Sadece onaylanmış fikirler
     ideas = Idea.objects(status="approved")
+
+    # Arama filtresi
+    if q:
+        ideas = ideas.filter(__raw__={
+            "$or": [
+                {"title": {"$regex": q, "$options": "i"}},
+                {"description": {"$regex": q, "$options": "i"}}
+            ]
+        })
+    # Kategori filtresi
+    if category:
+        ideas = ideas.filter(category=category)
+
+    # Sıralama
+    if sort == "likes":
+        # likes alanı modelde yok, 0 olarak dönecek
+        pass
+    elif sort == "swipe_score":
+        # swipe_score alanı modelde yok, 0.0 olarak dönecek
+        pass
+    else:
+        ideas = ideas.order_by("-created_at")
+
+    total = ideas.count()
+    ideas = ideas.skip((page - 1) * limit).limit(limit)
+
     data = []
     for idea in ideas:
         created_by_user = idea.created_by
@@ -27,6 +60,7 @@ def ideas_list(request):
             'id': str(idea.id),
             'title': idea.title,
             'description': idea.description,
+            'category': idea.category,
             'created_by': {
                 'id': str(created_by_user.id) if created_by_user else None,
                 'name': created_by_user.full_name if created_by_user else None
@@ -35,7 +69,12 @@ def ideas_list(request):
             'likes': 0,  # Like sistemi eklenince güncellenecek
             'swipe_score': 0.0  # Swipe sistemi eklenince güncellenecek
         })
-    return JsonResponse(data, safe=False)
+    return JsonResponse({
+        'total': total,
+        'page': page,
+        'limit': limit,
+        'ideas': data
+    })
 
 # Fikir Detay Sayfası
 # GET /ideas/<id>
