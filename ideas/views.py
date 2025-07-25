@@ -11,16 +11,68 @@ from datetime import datetime
 # Create your views here.
 
 # Fikirler Sayfası
-# GET /api/ideas/
-# Açıklama: Tüm fikirleri listeler
+# GET /ideas
+# Açıklama: Onaylanmış fikirleri listeler
+@csrf_exempt
 def ideas_list(request):
-    return JsonResponse({"message": "Fikirler Sayfası"})
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
+    # Sadece onaylanmış fikirler
+    ideas = Idea.objects(status="approved")
+    data = []
+    for idea in ideas:
+        created_by_user = idea.created_by
+        data.append({
+            'id': str(idea.id),
+            'title': idea.title,
+            'description': idea.description,
+            'created_by': {
+                'id': str(created_by_user.id) if created_by_user else None,
+                'name': created_by_user.full_name if created_by_user else None
+            },
+            'created_at': idea.created_at.isoformat() if idea.created_at else None,
+            'likes': 0,  # Like sistemi eklenince güncellenecek
+            'swipe_score': 0.0  # Swipe sistemi eklenince güncellenecek
+        })
+    return JsonResponse(data, safe=False)
 
 # Fikir Detay Sayfası
-# GET /api/ideas/<id>
+# GET /ideas/<id>
 # Açıklama: Belirli bir fikrin detayını getirir
+@csrf_exempt
 def idea_detail(request, id):
-    return JsonResponse({"message": f"Fikir Detay Sayfası: {id}"})
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
+    idea = Idea.objects(id=id, status="approved").first()
+    if not idea:
+        return JsonResponse({'status': 'error', 'message': 'Fikir bulunamadı veya onaylanmamış'}, status=404)
+    created_by_user = idea.created_by
+    approved_by_user = idea.approved_by
+    data = {
+        'id': str(idea.id),
+        'title': idea.title,
+        'description': idea.description,
+        'created_by': {
+            'id': str(created_by_user.id) if created_by_user else None,
+            'name': created_by_user.full_name if created_by_user else None
+        },
+        'created_at': idea.created_at.isoformat() if idea.created_at else None,
+        'approved_by': {
+            'id': str(approved_by_user.id) if approved_by_user else None,
+            'name': approved_by_user.full_name if approved_by_user else None
+        } if approved_by_user else None,
+        'approved_at': idea.approved_at.isoformat() if idea.approved_at else None,
+        'license': {
+            'accepted': idea.license_accepted,
+            'accepted_at': idea.license_accepted_at.isoformat() if idea.license_accepted_at else None,
+            'owner_share_percent': idea.owner_share_percent
+        },
+        'likes': 0,  # Like sistemi eklenince güncellenecek
+        'swipe_score': 0.0  # Swipe sistemi eklenince güncellenecek
+    }
+    return JsonResponse(data)
 
 # Fikir Başvurma Sayfası
 # GET /api/ideas/apply
@@ -46,6 +98,76 @@ def get_user_from_jwt(request):
         return User.objects(email=email).first()
     except Exception:
         return None
+
+def is_admin(user):
+    return user and ('admin' in getattr(user, 'user_type', []) or 'admin' in getattr(user, 'roles', []))
+
+from bson import ObjectId
+
+@csrf_exempt
+# GET /admin/ideas?status=pending
+# Sadece admin erişebilir, bekleyen fikirleri listeler
+def admin_list_pending_ideas(request):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    status_param = request.GET.get('status', 'pending_admin_approval')
+    ideas = Idea.objects(status=status_param)
+    data = [{
+        'id': str(idea.id),
+        'title': idea.title,
+        'description': idea.description,
+        'status': idea.status,
+        'created_by': str(idea.created_by.id) if idea.created_by else None,
+        'created_at': str(idea.created_at)
+    } for idea in ideas]
+    return JsonResponse({'status': 'ok', 'ideas': data})
+
+@csrf_exempt
+# PATCH /admin/ideas/<id>/approve
+# Sadece admin erişebilir, fikri onaylar
+def admin_approve_idea(request, id):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    try:
+        idea = Idea.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz ID'}, status=400)
+    if not idea or idea.status != 'pending_admin_approval':
+        return JsonResponse({'status': 'error', 'message': 'Onay bekleyen fikir bulunamadı'}, status=404)
+    now = datetime.utcnow()
+    idea.status = 'approved'
+    idea.approved_at = now
+    idea.approved_by = user
+    idea.save()
+    return JsonResponse({'status': 'ok', 'message': 'Fikir onaylandı'})
+
+@csrf_exempt
+# PATCH /admin/ideas/<id>/reject
+# Sadece admin erişebilir, fikri reddeder
+def admin_reject_idea(request, id):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    try:
+        idea = Idea.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz ID'}, status=400)
+    if not idea or idea.status != 'pending_admin_approval':
+        return JsonResponse({'status': 'error', 'message': 'Onay bekleyen fikir bulunamadı'}, status=404)
+    try:
+        data = json.loads(request.body)
+        reason = data.get('reason')
+    except Exception:
+        reason = None
+    now = datetime.utcnow()
+    idea.status = 'rejected'
+    idea.rejected_at = now
+    idea.rejected_by = user
+    idea.rejection_reason = reason
+    idea.save()
+    return JsonResponse({'status': 'ok', 'message': 'Fikir reddedildi'})
 
 @csrf_exempt
 # Fikir gönderme endpointi

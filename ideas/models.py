@@ -18,3 +18,8 @@ class Idea(Document):
     status = StringField(default='pending_admin_approval', choices=['pending', 'approved', 'rejected', 'pending_admin_approval'])
     created_at = DateTimeField(default=datetime.datetime.utcnow)
     updated_at = DateTimeField(default=datetime.datetime.utcnow)
+    approved_at = DateTimeField()
+    approved_by = ReferenceField(User)
+    rejected_at = DateTimeField()
+    rejected_by = ReferenceField(User)
+    rejection_reason = StringField()
