@@ -87,6 +87,9 @@ MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
 connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
 
+# Gemini AI API Key
+GEMINI_API_KEY = 'AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

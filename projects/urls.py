@@ -5,7 +5,8 @@ from .views import (
     project_chat, project_ai_panel, completed_projects_list, list_active_projects,
     complete_project, request_project_completion, list_completion_requests,
     approve_completion_request, reject_completion_request, submit_investment_offer,
-    approve_investment_offer, reject_investment_offer, leaderboard, toggle_project_like
+    approve_investment_offer, reject_investment_offer, leaderboard, toggle_project_like,
+    analyze_project_ai, get_project_investment_advice, get_user_project_suggestions
 )
 
 urlpatterns = [
@@ -26,6 +27,10 @@ urlpatterns = [
     path('<str:project_id>/investment-offers/<str:offer_id>/reject', reject_investment_offer),
     # Beğeni endpoint'i
     path('<str:id>/like', toggle_project_like),
+    # AI endpoint'leri
+    path('<str:id>/analyze', analyze_project_ai),
+    path('<str:id>/investment-advice', get_project_investment_advice),
+    path('users/suggestions', get_user_project_suggestions),
     # Daha spesifik URL'leri önce koy
     path('<str:id>/complete', complete_project),
     path('<str:id>/team', project_team),

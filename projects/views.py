@@ -9,6 +9,7 @@ from ideas.views import get_user_from_jwt
 import json
 from .models import InvestmentOffer
 from .models import ProjectLike
+from .utils import analyze_project, generate_project_suggestions, get_investment_advice
 
 # Create your views here.
 
@@ -688,3 +689,131 @@ def toggle_project_like(request, id):
             'liked': True,
             'like_count': len(project.likes)
         })
+
+# AI ENDPOINT'LERİ
+
+# POST /api/projects/<id>/analyze
+# Açıklama: AI ile proje analizi yapar
+@csrf_exempt
+def analyze_project_ai(request, id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız'}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz proje ID'}, status=400)
+    
+    if not project:
+        return JsonResponse({'status': 'error', 'message': 'Proje bulunamadı'}, status=404)
+    
+    # Proje verilerini hazırla
+    project_data = {
+        'title': project.title,
+        'description': getattr(project, 'description', ''),
+        'category': getattr(project, 'category', ''),
+        'team_size': len(project.team_members) if project.team_members else 0,
+        'target_amount': getattr(project, 'target_amount', 0),
+        'current_amount': getattr(project, 'current_amount', 0),
+        'like_count': len(project.likes) if project.likes else 0,
+        'is_completed': project.is_completed,
+        'status': project.status
+    }
+    
+    # AI analizi yap
+    ai_analysis = analyze_project(project_data)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'project_id': str(project.id),
+        'project_title': project.title,
+        'ai_analysis': ai_analysis
+    })
+
+# POST /api/projects/<id>/investment-advice
+# Açıklama: Yatırım tavsiyesi alır
+@csrf_exempt
+def get_project_investment_advice(request, id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız'}, status=401)
+    
+    # Yatırımcı kontrolü
+    if 'investor' not in getattr(user, 'user_type', []):
+        return JsonResponse({'status': 'error', 'message': 'Sadece yatırımcılar yatırım tavsiyesi alabilir'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        investor_profile = data.get('investor_profile', {})
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'}, status=400)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz proje ID'}, status=400)
+    
+    if not project:
+        return JsonResponse({'status': 'error', 'message': 'Proje bulunamadı'}, status=404)
+    
+    # Proje verilerini hazırla
+    project_data = {
+        'title': project.title,
+        'description': getattr(project, 'description', ''),
+        'category': getattr(project, 'category', ''),
+        'target_amount': getattr(project, 'target_amount', 0),
+        'current_amount': getattr(project, 'current_amount', 0),
+        'like_count': len(project.likes) if project.likes else 0,
+        'team_size': len(project.team_members) if project.team_members else 0
+    }
+    
+    # AI yatırım tavsiyesi al
+    investment_advice = get_investment_advice(project_data, investor_profile)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'project_id': str(project.id),
+        'project_title': project.title,
+        'investment_advice': investment_advice
+    })
+
+# POST /api/users/suggestions
+# Açıklama: Kullanıcı için proje önerileri üretir
+@csrf_exempt
+def get_user_project_suggestions(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız'}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        user_profile = data.get('user_profile', {})
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'}, status=400)
+    
+    # Kullanıcı profiline kullanıcı bilgilerini ekle
+    user_profile.update({
+        'user_type': getattr(user, 'user_type', []),
+        'full_name': user.full_name,
+        'email': user.email
+    })
+    
+    # AI proje önerileri üret
+    suggestions = generate_project_suggestions(user_profile)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'user_id': str(user.id),
+        'user_name': user.full_name,
+        'suggestions': suggestions
+    })
