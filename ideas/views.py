@@ -7,6 +7,8 @@ import json
 import jwt
 from django.conf import settings
 from datetime import datetime
+from .models import SwipeVote
+from .models import JoinRequest
 
 # Create your views here.
 
@@ -268,3 +270,133 @@ def submit_idea(request):
         'created_at': str(idea.created_at)
     }
     return JsonResponse({'status': 'ok', 'idea': idea_data})
+
+@csrf_exempt
+def swipe_vote(request, id):
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    try:
+        data = json.loads(request.body)
+        vote = data.get("vote")
+        if vote not in ["like", "dislike", "pass"]:
+            return JsonResponse({"status": "error", "message": "Geçersiz oy türü"}, status=400)
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+
+    idea = Idea.objects(id=id, status="approved").first()
+    if not idea:
+        return JsonResponse({"status": "error", "message": "Fikir bulunamadı"}, status=404)
+
+    # Aynı kullanıcı aynı fikre daha önce oy verdi mi?
+    existing = SwipeVote.objects(idea=idea, user=user).first()
+    if existing:
+        return JsonResponse({"status": "error", "message": "Bu fikre zaten oy verdiniz."}, status=400)
+
+    # Oy kaydı oluştur
+    SwipeVote(idea=idea, user=user, vote=vote).save()
+
+    # Fikirde oy sayılarını güncelle
+    if vote == "like":
+        idea.likes = (idea.likes or 0) + 1
+    elif vote == "dislike":
+        idea.dislikes = (idea.dislikes or 0) + 1
+    elif vote == "pass":
+        idea.passes = (idea.passes or 0) + 1
+
+    # Swipe score güncelle (örnek: like=+1, dislike=-1, pass=+0.5)
+    total_votes = (idea.likes or 0) + (idea.dislikes or 0) + (idea.passes or 0)
+    if total_votes > 0:
+        idea.swipe_score = ((idea.likes or 0) * 1 + (idea.dislikes or 0) * -1 + (idea.passes or 0) * 0.5) / total_votes
+    idea.save()
+
+    return JsonResponse({"status": "ok", "message": "Oyunuz kaydedildi."})
+
+@csrf_exempt
+def join_request(request, idea_id):
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    try:
+        data = json.loads(request.body)
+        note = data.get("note", "")
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+
+    idea = Idea.objects(id=idea_id, status="approved").first()
+    if not idea:
+        return JsonResponse({"status": "error", "message": "Fikir bulunamadı"}, status=404)
+
+    existing = JoinRequest.objects(idea=idea, user=user).first()
+    if existing:
+        return JsonResponse({"status": "error", "message": "Zaten başvurdunuz."}, status=400)
+
+    JoinRequest(idea=idea, user=user, note=note).save()
+    return JsonResponse({"status": "ok", "message": "Başvurunuz alındı."})
+
+@csrf_exempt
+def join_request_status(request, idea_id):
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    idea = Idea.objects(id=idea_id, status="approved").first()
+    if not idea:
+        return JsonResponse({"status": "error", "message": "Fikir bulunamadı"}, status=404)
+    jr = JoinRequest.objects(idea=idea, user=user).first()
+    if jr:
+        return JsonResponse({"has_applied": True, "status": jr.status})
+    else:
+        return JsonResponse({"has_applied": False})
+
+@csrf_exempt
+def admin_list_join_requests(request):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    status_param = request.GET.get('status')
+    q = {}
+    if status_param:
+        q['status'] = status_param
+    join_requests = JoinRequest.objects(**q)
+    data = [{
+        'id': str(jr.id),
+        'idea_id': str(jr.idea.id),
+        'user_id': str(jr.user.id),
+        'user_name': jr.user.full_name,
+        'note': jr.note,
+        'status': jr.status,
+        'created_at': str(jr.created_at),
+        'admin_note': getattr(jr, 'admin_note', None)
+    } for jr in join_requests]
+    return JsonResponse({'status': 'ok', 'join_requests': data})
+
+@csrf_exempt
+def admin_approve_join_request(request, id):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    jr = JoinRequest.objects(id=id).first()
+    if not jr or jr.status != "pending":
+        return JsonResponse({'status': 'error', 'message': 'Başvuru bulunamadı veya zaten işlenmiş'}, status=404)
+    jr.status = "approved"
+    jr.admin_note = json.loads(request.body).get("admin_note") if request.body else None
+    jr.save()
+    return JsonResponse({'status': 'ok', 'message': 'Başvuru onaylandı'})
+
+@csrf_exempt
+def admin_reject_join_request(request, id):
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    jr = JoinRequest.objects(id=id).first()
+    if not jr or jr.status != "pending":
+        return JsonResponse({'status': 'error', 'message': 'Başvuru bulunamadı veya zaten işlenmiş'}, status=404)
+    data = json.loads(request.body) if request.body else {}
+    jr.status = "rejected"
+    jr.admin_note = data.get("admin_note")
+    jr.save()
+    return JsonResponse({'status': 'ok', 'message': 'Başvuru reddedildi'})
