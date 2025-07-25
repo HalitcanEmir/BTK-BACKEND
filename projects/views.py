@@ -1,5 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
+from .models import Project
+from django.views.decorators.csrf import csrf_exempt
 
 # Create your views here.
 
@@ -66,3 +68,24 @@ def project_chat(request, id):
 # Açıklama: AI yardımcıları paneli
 def project_ai_panel(request, id):
     return JsonResponse({"message": f"AI Yardımcıları Paneli: {id}"})
+
+@csrf_exempt
+def completed_projects_list(request):
+    completed = request.GET.get('completed')
+    if completed == 'true':
+        projects = Project.objects(is_completed=True)
+    else:
+        projects = Project.objects()
+    data = []
+    for project in projects:
+        data.append({
+            'id': str(project.id),
+            'title': getattr(project, 'title', None),
+            'description': getattr(project, 'description', None),
+            'team': getattr(project, 'team', []),  # varsa
+            'completed_at': project.completed_at.isoformat() if project.completed_at else None,
+            'success_label': getattr(project, 'success_label', None),
+            'cover_image': getattr(project, 'cover_image', None),  # opsiyonel
+            'story': getattr(project, 'story', None),  # opsiyonel
+        })
+    return JsonResponse({'projects': data})

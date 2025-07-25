@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     projects_list, project_detail, jobs_list, job_detail, project_team,
     approve_candidate, reject_candidate, project_plan, project_tasks,
-    project_chat, project_ai_panel
+    project_chat, project_ai_panel, completed_projects_list
 )
 
 urlpatterns = [
@@ -17,4 +17,8 @@ urlpatterns = [
     path('<str:id>/tasks', project_tasks),
     path('<str:id>/chat', project_chat),
     path('<str:id>/ai', project_ai_panel),
+]
+
+urlpatterns += [
+    path('', completed_projects_list),
 ] 
