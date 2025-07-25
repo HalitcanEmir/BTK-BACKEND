@@ -1,13 +1,16 @@
 from django.urls import path
-from .views import login, register, verify_email, reset_password, my_profile, user_profile, edit_profile, edit_roles
+from . import views
 
 urlpatterns = [
-    path('register', register),
-    path('login', login),
-    path('verify-email', verify_email),
-    path('reset-password', reset_password),
-    path('me', my_profile),
-    path('<str:id>', user_profile),
-    path('me/edit', edit_profile),
-    path('roles', edit_roles),
+    path('register', views.register, name='register'),
+    path('login', views.login, name='login'),
+    path('me', views.my_profile, name='my_profile'),
+    path('edit-roles', views.edit_roles, name='edit_roles'),
+    path('verify-identity', views.verify_identity, name='verify_identity'),
+    path('verify-id-card', views.verify_id_card, name='verify_id_card'),
+    path('verify-linkedin', views.verify_linkedin, name='verify_linkedin'),
+    path('verification-status', views.get_verification_status, name='verification_status'),
+    path('admin/verification-requests', views.admin_verification_requests, name='admin_verification_requests'),
+    path('admin/approve-verification', views.admin_approve_verification, name='admin_approve_verification'),
+    path('admin/reject-verification', views.admin_reject_verification, name='admin_reject_verification'),
 ] 

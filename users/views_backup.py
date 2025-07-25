@@ -483,8 +483,7 @@ def verify_id_card(request):
                     try:
                         with open(file_path, 'rb') as image_file:
                             image_data = base64.b64encode(image_file.read()).decode('utf-8')
-                            # Sadece base64 kısmını gönder, önek olmadan
-                            id_card_image = image_data
+                            id_card_image = f"data:image/jpeg;base64,{image_data}"
                             print(f"✅ Base64 dönüşümü başarılı, uzunluk: {len(image_data)}")
                             file_found = True
                             break
@@ -503,10 +502,6 @@ def verify_id_card(request):
                 }, status=400)
         else:
             print(f"✅ Base64 formatında geldi, uzunluk: {len(id_card_image)}")
-            # Eğer data:image/jpeg;base64, öneki varsa kaldır
-            if id_card_image.startswith('data:image/jpeg;base64,'):
-                id_card_image = id_card_image[23:]  # data:image/jpeg;base64, kısmını kaldır
-                print(f"✅ Base64 öneki kaldırıldı")
         
         # AI analizi
         print(f"🔍 AI analizi başlatılıyor...")
