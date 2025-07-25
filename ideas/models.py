@@ -54,3 +54,9 @@ class JoinRequest(Document):
             {'fields': ['idea', 'user'], 'unique': True}
         ]
     }
+
+class ProjectMessage(Document):
+    idea = ReferenceField(Idea, required=True)
+    sender = ReferenceField(User, required=True)
+    content = StringField(required=True)
+    timestamp = DateTimeField(default=datetime.datetime.utcnow)

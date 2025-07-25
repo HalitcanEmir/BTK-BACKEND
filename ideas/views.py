@@ -9,6 +9,7 @@ from django.conf import settings
 from datetime import datetime
 from .models import SwipeVote
 from .models import JoinRequest
+from .models import ProjectMessage
 
 # Create your views here.
 
@@ -86,7 +87,11 @@ def idea_detail(request, id):
     user = get_user_from_jwt(request)
     if not user:
         return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
-    idea = Idea.objects(id=id, status="approved").first()
+    try:
+        obj_id = ObjectId(id)
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz ID'}, status=400)
+    idea = Idea.objects(id=obj_id, status="approved").first()
     if not idea:
         return JsonResponse({'status': 'error', 'message': 'Fikir bulunamadı veya onaylanmamış'}, status=404)
     created_by_user = idea.created_by
@@ -400,3 +405,45 @@ def admin_reject_join_request(request, id):
     jr.admin_note = data.get("admin_note")
     jr.save()
     return JsonResponse({'status': 'ok', 'message': 'Başvuru reddedildi'})
+
+@csrf_exempt
+def idea_project_chat(request, idea_id):
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    try:
+        idea_obj_id = ObjectId(idea_id)
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    idea = Idea.objects(id=idea_obj_id).first()
+    if not idea:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    jr = JoinRequest.objects(idea=idea, user=user, status="approved").first()
+    if not jr:
+        return JsonResponse({"status": "error", "message": "Bu projeye katılımınız onaylanmamış"}, status=403)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            content = data.get("content", "").strip()
+            if not content:
+                return JsonResponse({"status": "error", "message": "Mesaj boş olamaz"}, status=400)
+        except Exception:
+            return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+        ProjectMessage(idea=idea, sender=user, content=content).save()
+        return JsonResponse({"status": "ok", "message": "Mesaj gönderildi"})
+    elif request.method == "GET":
+        page = int(request.GET.get("page", 1))
+        limit = int(request.GET.get("limit", 20))
+        messages = ProjectMessage.objects(idea=idea).order_by("-timestamp").skip((page-1)*limit).limit(limit)
+        data = [{
+            "id": str(msg.id),
+            "sender": {
+                "id": str(msg.sender.id),
+                "name": msg.sender.full_name
+            },
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat()
+        } for msg in messages]
+        return JsonResponse({"messages": data})
+    else:
+        return JsonResponse({"status": "error", "message": "Yöntem desteklenmiyor"}, status=405)
