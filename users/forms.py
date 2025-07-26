@@ -13,4 +13,19 @@ class IDCardForm(forms.Form):
                 raise forms.ValidationError('Maksimum dosya boyutu 5MB olmalı.')
             if not image.name.lower().endswith(('.jpg', '.jpeg', '.png')):
                 raise forms.ValidationError('Sadece .jpg, .jpeg veya .png dosyaları kabul edilir.')
-        return image 
+        return image
+
+class CVUploadForm(forms.Form):
+    cv_file = forms.FileField(
+        required=True,
+        widget=forms.ClearableFileInput(attrs={'accept': '.pdf'})
+    )
+    
+    def clean_cv_file(self):
+        file = self.cleaned_data.get('cv_file')
+        if file:
+            if file.size > 5 * 1024 * 1024:
+                raise forms.ValidationError('Maksimum dosya boyutu 5MB olmalı.')
+            if not file.name.lower().endswith('.pdf'):
+                raise forms.ValidationError('Sadece PDF dosyaları kabul edilir.')
+        return file 

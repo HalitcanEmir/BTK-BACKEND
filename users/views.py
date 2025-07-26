@@ -7,8 +7,10 @@ from .models import User
 from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match
 import jwt
 from django.conf import settings
-from .forms import IDCardForm
-from .utils import send_image_to_gemini
+from .forms import IDCardForm, CVUploadForm
+from .utils import send_image_to_gemini, extract_text_from_pdf, detect_name_from_cv, compare_names, analyze_cv_with_gemini
+import base64
+import os
 from mongoengine.errors import DoesNotExist
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -927,6 +929,112 @@ def verify_id_view(request):
         if not data:
             return JsonResponse({'error': 'Gemini cevap vermedi.'}, status=400)
         
+        # Eğer ad, soyad ve tc varsa kullanıcıya kaydet
+        name = data.get('name')
+        surname = data.get('surname')
+        tc = data.get('tc')
+        if name and surname and tc:
+            user.verified_name = name
+            user.verified_surname = surname
+            user.tc_verified = tc
+            user.identity_verified = True
+            user.save()
+        
         # Sadece Gemini'nin cevabını döndür
         return JsonResponse(data)
+    return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
+
+@csrf_exempt
+def upload_cv_view(request):
+    if request.method == 'POST':
+        # JWT authentication
+        user = get_user_from_token(request)
+        if not user:
+            return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
+        
+        # Debug: Kullanıcı durumunu kontrol et
+        print(f"User ID: {user.id}")
+        print(f"Identity verified: {user.identity_verified}")
+        print(f"Verified name: {user.verified_name}")
+        print(f"Verified surname: {user.verified_surname}")
+        
+        # Kimlik doğrulaması geçmiş mi kontrol et
+        if not user.identity_verified or not user.verified_name or not user.verified_surname:
+            return JsonResponse({
+                'error': 'Önce kimlik doğrulaması yapmalısınız.',
+                'debug': {
+                    'identity_verified': user.identity_verified,
+                    'verified_name': user.verified_name,
+                    'verified_surname': user.verified_surname
+                }
+            }, status=400)
+        
+        form = CVUploadForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return JsonResponse({'error': 'Geçersiz dosya formatı veya boyut.'}, status=400)
+        
+        cv_file = form.cleaned_data['cv_file']
+        
+        # CV'den metin çıkar
+        cv_text = extract_text_from_pdf(cv_file)
+        if not cv_text:
+            return JsonResponse({'error': 'CV dosyasından metin çıkarılamadı.'}, status=400)
+        
+        # CV'den ad-soyad tespit et
+        cv_name = detect_name_from_cv(cv_text)
+        if not cv_name:
+            return JsonResponse({'error': 'CV\'den ad-soyad tespit edilemedi.'}, status=400)
+        
+        # Kimlikteki ad-soyad ile karşılaştır
+        id_full_name = f"{user.verified_name} {user.verified_surname}"
+        
+        if compare_names(cv_name, id_full_name):
+            # Eşleşiyor - CV'yi kaydet ve analiz et
+            user.cv_file = cv_file.name  # Dosya adını kaydet, dosya objesini değil
+            user.cv_verified = True
+            user.cv_name_detected = cv_name
+            user.save()
+            
+            # CV'yi Gemini ile analiz et
+            cv_analysis = analyze_cv_with_gemini(cv_text)
+            
+            if 'languages' in cv_analysis:
+                # Programlama dillerini kullanıcıya kaydet
+                user.languages_known = json.dumps(cv_analysis['languages'], ensure_ascii=False)
+                
+                # Dilleri ve seviyeleri ayrı ayrı kaydet
+                if 'languages_list' in cv_analysis:
+                    user.known_languages = cv_analysis['languages_list']
+                
+                if 'levels_summary' in cv_analysis:
+                    user.language_levels = json.dumps(cv_analysis['levels_summary'], ensure_ascii=False)
+                
+                user.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'CV başarıyla doğrulandı ve analiz edildi.',
+                    'cv_name': cv_name,
+                    'id_name': id_full_name,
+                    'languages_analysis': cv_analysis['languages'],
+                    'known_languages': cv_analysis.get('languages_list', []),
+                    'language_levels': cv_analysis.get('levels_summary', {})
+                })
+            else:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'CV doğrulandı fakat dil analizi yapılamadı.',
+                    'cv_name': cv_name,
+                    'id_name': id_full_name,
+                    'analysis_error': cv_analysis.get('error', 'Bilinmeyen hata')
+                })
+        else:
+            # Eşleşmiyor
+            return JsonResponse({
+                'success': False,
+                'error': 'CV\'deki ad-soyad kimlikle eşleşmiyor. Lütfen kendi CV\'nizi yükleyin.',
+                'cv_name': cv_name,
+                'id_name': id_full_name
+            })
+    
     return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)

@@ -8,6 +8,10 @@ import re
 from PIL import Image
 import io
 import base64
+import fitz  # PyMuPDF
+import re
+from unidecode import unidecode
+import PyPDF2
 
 # Şifreyi hashler
 def hash_password(password):
@@ -393,6 +397,12 @@ def build_id_prompt():
 
 Sadece JSON formatında cevap ver, başka açıklama ekleme."""
 
+def clean_gemini_json(raw_text):
+    """Gemini'den dönen cevaptaki kod bloğu işaretlerini temizle"""
+    # Kod bloğu işaretlerini temizle
+    cleaned = re.sub(r"^```json|^```|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+    return cleaned
+
 def send_image_to_gemini(img_file):
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -410,12 +420,122 @@ def send_image_to_gemini(img_file):
         if not response.text or response.text.strip() == "":
             return {"error": "Gemini boş cevap döndü"}
         
-        # JSON parse et
+        # JSON parse et - kod bloğu işaretlerini temizle
         try:
-            data = json.loads(response.text)
+            cleaned_text = clean_gemini_json(response.text)
+            data = json.loads(cleaned_text)
             return data
         except json.JSONDecodeError:
             # JSON parse edilemezse raw cevabı döndür
+            return {"error": f"Gemini JSON döndürmedi, raw cevap: {response.text[:200]}"}
+            
+    except Exception as e:
+        return {"error": f"Gemini API hatası: {str(e)}"} 
+
+def extract_text_from_pdf(file) -> str:
+    """PDF'den metin çıkar - PyPDF2 kullanarak"""
+    try:
+        # Dosyayı baştan oku
+        file.seek(0)
+        pdf_reader = PyPDF2.PdfReader(file)
+        text = ""
+        
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+        
+        return text
+    except Exception as e:
+        print(f"PDF okuma hatası: {e}")
+        return None
+
+def detect_name_from_cv(text: str) -> str:
+    """CV'den ad-soyad tespit et"""
+    if not text:
+        return None
+    
+    # İlk 10 satıra bak
+    lines = text.strip().split("\n")[:10]
+    
+    for line in lines:
+        line = line.strip()
+        # Ad soyad pattern'i: 2-3 kelime, sadece harf ve boşluk
+        if re.match(r'^[A-ZÇĞIİÖŞÜ][a-zçğıiöşü]+\s+[A-ZÇĞIİÖŞÜ][a-zçğıiöşü]+(\s+[A-ZÇĞIİÖŞÜ][a-zçğıiöşü]+)?$', line):
+            return line
+    
+    # Eğer pattern bulunamazsa, ilk 2-3 kelimelik satırı al
+    for line in lines:
+        words = line.strip().split()
+        if 2 <= len(words) <= 3 and all(word.isalpha() for word in words):
+            return line.strip()
+    
+    return None
+
+def normalize_name(name: str) -> str:
+    """Ad-soyadı normalize et (karşılaştırma için)"""
+    if not name:
+        return ""
+    # Türkçe karakterleri normalize et
+    normalized = unidecode(name.lower())
+    # Fazla boşlukları temizle
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+def compare_names(name1: str, name2: str) -> bool:
+    """İki adı karşılaştır"""
+    if not name1 or not name2:
+        return False
+    
+    norm1 = normalize_name(name1)
+    norm2 = normalize_name(name2)
+    
+    return norm1 == norm2 
+
+def analyze_cv_with_gemini(cv_text: str) -> dict:
+    """CV'yi Gemini ile analiz et ve programlama dillerini çıkar"""
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = """Bu CV'yi analiz et ve programlama dillerini tespit et.
+
+Her dil için şu bilgileri ver:
+- Dil adı
+- Seviye (Başlangıç, Orta, İleri, Uzman)
+- Kendi yorumun (ne kadar iyi bildiğini, hangi projelerde kullandığını)
+
+Sadece JSON formatında döndür:
+{
+  "languages": [
+    {
+      "name": "Python",
+      "level": "İleri",
+      "comment": "3 yıl deneyim, web development ve data science projelerinde kullanıyor"
+    },
+    {
+      "name": "JavaScript",
+      "level": "Orta", 
+      "comment": "Frontend development için kullanıyor, React bilgisi var"
+    }
+  ],
+  "languages_list": ["Python", "JavaScript"],
+  "levels_summary": {
+    "Python": "İleri",
+    "JavaScript": "Orta"
+  }
+}
+
+Sadece JSON döndür, başka açıklama ekleme."""
+        
+        response = model.generate_content([prompt, cv_text])
+        
+        if not response.text or response.text.strip() == "":
+            return {"error": "Gemini boş cevap döndü"}
+        
+        try:
+            cleaned_text = clean_gemini_json(response.text)
+            data = json.loads(cleaned_text)
+            return data
+        except json.JSONDecodeError:
             return {"error": f"Gemini JSON döndürmedi, raw cevap: {response.text[:200]}"}
             
     except Exception as e:

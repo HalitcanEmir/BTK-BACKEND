@@ -35,3 +35,12 @@ class User(Document):
     verification_status = StringField(default='pending', choices=['pending', 'id_verified', 'verified', 'rejected'])
     verification_notes = StringField()  # Doğrulama notları
     tc_verified = StringField()  # Kimlikten doğrulanan T.C. Kimlik No
+    
+    # CV doğrulama alanları
+    cv_file = StringField()  # CV dosyası URL'si
+    cv_verified = BooleanField(default=False)  # CV doğrulandı mı?
+    cv_name_detected = StringField()  # CV'den tespit edilen ad-soyad
+    
+    # Programlama dilleri ve seviyeleri
+    known_languages = ListField(StringField())  # Bilinen diller listesi
+    language_levels = StringField()  # Dillerin seviyeleri JSON string
