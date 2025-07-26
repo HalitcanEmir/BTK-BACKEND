@@ -34,3 +34,4 @@ class User(Document):
     # Doğrulama durumu
     verification_status = StringField(default='pending', choices=['pending', 'id_verified', 'verified', 'rejected'])
     verification_notes = StringField()  # Doğrulama notları
+    tc_verified = StringField()  # Kimlikten doğrulanan T.C. Kimlik No

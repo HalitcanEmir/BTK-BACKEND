@@ -7,6 +7,11 @@ from .models import User
 from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match
 import jwt
 from django.conf import settings
+from .forms import IDCardForm
+from .utils import send_image_to_gemini
+from mongoengine.errors import DoesNotExist
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
 
 # Create your views here.
 
@@ -45,6 +50,38 @@ def get_user_from_jwt(request):
         return None
     except Exception:
         return None
+
+def get_user_from_token(request):
+    """JWT token'dan kullanıcıyı al"""
+    auth_header = request.headers.get('Authorization')
+    print(f"Auth header: {auth_header}")
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print("Auth header yok veya Bearer ile başlamıyor")
+        return None
+    
+    token = auth_header.split(' ')[1]
+    print(f"Token: {token[:20]}...")  # İlk 20 karakteri göster
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(f"Payload: {payload}")
+        email = payload.get('email')  # user_id yerine email kullan
+        print(f"Email: {email}")
+        if email:
+            user = User.objects.get(email=email)  # id yerine email ile ara
+            print(f"User found: {user.email}")
+            return user
+        else:
+            print("Email bulunamadı")
+    except jwt.InvalidTokenError as e:
+        print(f"JWT decode hatası: {e}")
+        return None
+    except DoesNotExist as e:
+        print(f"User bulunamadı: {e}")
+        return None
+    except Exception as e:
+        print(f"Beklenmeyen hata: {e}")
+        return None
+    return None
 
 # Giriş Yap
 # POST /api/auth/login
@@ -870,3 +907,26 @@ def admin_reject_verification(request):
             'message': 'Doğrulama reddedilemedi',
             'error': str(e)
         }, status=500)
+
+@csrf_exempt  # Postman'dan test için CSRF'yi devre dışı bırakıyoruz
+def verify_id_view(request):
+    if request.method == 'POST':
+        # JWT authentication
+        user = get_user_from_token(request)
+        if not user:
+            return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
+        
+        if 'id_card_image' not in request.FILES:
+            return JsonResponse({'error': 'Hiçbir dosya gelmedi.'}, status=400)
+        img = request.FILES['id_card_image']
+        if not img.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+            return JsonResponse({'error': 'Sadece kimlik fotoğrafı (.jpg, .jpeg, .png) yükleyin.'}, status=400)
+        
+        # Gemini'ye gönder ve cevabını döndür
+        data = send_image_to_gemini(img)
+        if not data:
+            return JsonResponse({'error': 'Gemini cevap vermedi.'}, status=400)
+        
+        # Sadece Gemini'nin cevabını döndür
+        return JsonResponse(data)
+    return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)

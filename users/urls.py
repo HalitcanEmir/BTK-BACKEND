@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import verify_id_view
 
 urlpatterns = [
     path('register', views.register, name='register'),
@@ -13,4 +14,8 @@ urlpatterns = [
     path('admin/verification-requests', views.admin_verification_requests, name='admin_verification_requests'),
     path('admin/approve-verification', views.admin_approve_verification, name='admin_approve_verification'),
     path('admin/reject-verification', views.admin_reject_verification, name='admin_reject_verification'),
+]
+
+urlpatterns += [
+    path('verify-id/', verify_id_view, name='verify_id'),
 ] 

@@ -370,3 +370,53 @@ def verify_identity_match(id_name, id_surname, linkedin_name):
             'error': str(e),
             'message': 'Eşleşme kontrolü başarısız'
         } 
+
+import google.generativeai as genai
+import base64
+import json
+from django.conf import settings
+
+def build_id_prompt():
+    return """Bu görseli analiz et ve şu kurallara göre cevap ver:
+
+1. Eğer bu bir T.C. kimlik kartının ön yüzü ise:
+   - Ad, soyad ve T.C. kimlik numarasını çıkar
+   - JSON formatında döndür: {"name": "Ad", "surname": "Soyad", "tc": "12345678901"}
+
+2. Eğer bu bir kimlik kartı değilse:
+   - Ne tür bir görsel olduğunu belirt
+   - Neden kimlik doğrulaması yapılamadığını açıkla
+   - JSON formatında döndür: {"error": "Bu bir kimlik kartı değil, [açıklama]"}
+
+3. Eğer görselde hiçbir şey okunamıyorsa:
+   - JSON formatında döndür: {"error": "Görselde hiçbir şey okunamıyor"}
+
+Sadece JSON formatında cevap ver, başka açıklama ekleme."""
+
+def send_image_to_gemini(img_file):
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = build_id_prompt()
+        
+        img_bytes = img_file.read()
+        img_file.seek(0)
+        image_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        image_data = {"mime_type": "image/jpeg", "data": image_base64}
+        
+        response = model.generate_content([prompt, image_data])
+        
+        # Cevabı kontrol et
+        if not response.text or response.text.strip() == "":
+            return {"error": "Gemini boş cevap döndü"}
+        
+        # JSON parse et
+        try:
+            data = json.loads(response.text)
+            return data
+        except json.JSONDecodeError:
+            # JSON parse edilemezse raw cevabı döndür
+            return {"error": f"Gemini JSON döndürmedi, raw cevap: {response.text[:200]}"}
+            
+    except Exception as e:
+        return {"error": f"Gemini API hatası: {str(e)}"} 
