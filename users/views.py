@@ -206,14 +206,127 @@ def reset_password(request):
 # Kendi Profilim
 # GET /api/users/me
 # Açıklama: Giriş yapan kullanıcının profilini getirir
+@csrf_exempt
 def my_profile(request):
-    return JsonResponse({"message": "Kendi Profilim"})
+    """Kullanıcının kendi profilini görüntüleme"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Sadece GET isteği desteklenir.'}, status=405)
+    
+    user = get_user_from_token(request)
+    if not user:
+        return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
+    
+    # Temel bilgiler
+    data = {
+        "id": str(user.id),
+        "full_name": f"{user.verified_name or ''} {user.verified_surname or ''}".strip(),
+        "email": user.email,
+        "user_type": user.user_type,
+        "identity_verified": user.identity_verified,
+        "cv_verified": getattr(user, 'cv_verified', False),
+        "github_verified": user.github_verified,
+        "linkedin_verified": user.linkedin_verified,
+        "can_invest": user.can_invest,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
+    
+    # CV'den gelen bilgiler
+    if user.languages_known:
+        try:
+            data["languages"] = json.loads(user.languages_known)
+        except:
+            data["languages"] = []
+    
+    if user.known_languages:
+        data["known_languages"] = user.known_languages
+    
+    if user.language_levels:
+        try:
+            data["language_levels"] = json.loads(user.language_levels)
+        except:
+            data["language_levels"] = {}
+    
+    # Kimlik bilgileri (sadece kendi profili için)
+    if user.verified_name and user.verified_surname:
+        data["verified_full_name"] = f"{user.verified_name} {user.verified_surname}"
+    
+    if user.tc_verified:
+        data["tc_verified"] = True  # TC numarasını gösterme, sadece doğrulandığını belirt
+    
+    # CV dosyası
+    if user.cv_file:
+        data["cv_file"] = user.cv_file
+    
+    # Profil özeti
+    if user.profile_summary:
+        data["profile_summary"] = user.profile_summary
+    
+    # Teknik analiz
+    if user.technical_analysis:
+        try:
+            data["technical_analysis"] = json.loads(user.technical_analysis)
+        except:
+            data["technical_analysis"] = {}
+    
+    return JsonResponse(data)
 
 # Başka Kullanıcının Profili
 # GET /api/users/<id>
 # Açıklama: Başka bir kullanıcının profilini getirir
-def user_profile(request, id):
-    return JsonResponse({"message": f"Kullanıcı Profili: {id}"})
+@csrf_exempt
+def user_profile(request, user_id):
+    """Başka bir kullanıcının profilini görüntüleme (kısıtlı bilgi)"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Sadece GET isteği desteklenir.'}, status=405)
+    
+    # Giriş yapmış kullanıcı kontrolü
+    current_user = get_user_from_token(request)
+    if not current_user:
+        return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
+    
+    try:
+        # Profili görüntülenecek kullanıcıyı bul
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Kullanıcı bulunamadı.'}, status=404)
+    
+    # Kısıtlı bilgiler (hassas bilgiler gizli)
+    data = {
+        "id": str(target_user.id),
+        "full_name": f"{target_user.verified_name or ''} {target_user.verified_surname or ''}".strip(),
+        "user_type": target_user.user_type,
+        "identity_verified": target_user.identity_verified,
+        "cv_verified": getattr(target_user, 'cv_verified', False),
+        "github_verified": target_user.github_verified,
+        "linkedin_verified": target_user.linkedin_verified,
+        "can_invest": target_user.can_invest,
+        "created_at": target_user.created_at.isoformat() if target_user.created_at else None,
+    }
+    
+    # CV'den gelen bilgiler (kısıtlı)
+    if target_user.known_languages:
+        data["known_languages"] = target_user.known_languages
+    
+    if target_user.language_levels:
+        try:
+            data["language_levels"] = json.loads(target_user.language_levels)
+        except:
+            data["language_levels"] = {}
+    
+    # Profil özeti
+    if target_user.profile_summary:
+        data["profile_summary"] = target_user.profile_summary
+    
+    # Admin ise daha fazla bilgi göster
+    if 'admin' in current_user.user_type:
+        data["email"] = target_user.email
+        if target_user.languages_known:
+            try:
+                data["languages"] = json.loads(target_user.languages_known)
+            except:
+                data["languages"] = []
+    
+    return JsonResponse(data)
 
 # Profil Düzenleme
 # PATCH /api/users/me

@@ -1,11 +1,13 @@
 from django.urls import path
 from . import views
-from .views import verify_id_view, upload_cv_view
+from .views import verify_id_view, upload_cv_view, my_profile, user_profile
 
 urlpatterns = [
     path('register', views.register, name='register'),
     path('login', views.login, name='login'),
     path('me', views.my_profile, name='my_profile'),
+    path('profile/', my_profile, name='my_profile'),
+    path('profile/<str:user_id>/', user_profile, name='user_profile'),
     path('edit-roles', views.edit_roles, name='edit_roles'),
     path('verify-identity', views.verify_identity, name='verify_identity'),
     path('verify-id-card', views.verify_id_card, name='verify_id_card'),
