@@ -173,7 +173,7 @@ def admin_list_pending_ideas(request):
 
 @csrf_exempt
 # PATCH /admin/ideas/<id>/approve
-# Sadece admin erişebilir, fikri onaylar
+# Sadece admin erişebilir, fikri onaylar ve proje oluşturur
 def admin_approve_idea(request, id):
     user = get_user_from_jwt(request)
     if not is_admin(user):
@@ -184,12 +184,46 @@ def admin_approve_idea(request, id):
         return JsonResponse({'status': 'error', 'message': 'Geçersiz ID'}, status=400)
     if not idea or idea.status != 'pending_admin_approval':
         return JsonResponse({'status': 'error', 'message': 'Onay bekleyen fikir bulunamadı'}, status=404)
+    
     now = datetime.utcnow()
     idea.status = 'approved'
     idea.approved_at = now
     idea.approved_by = user
     idea.save()
-    return JsonResponse({'status': 'ok', 'message': 'Fikir onaylandı'})
+    
+    # Fikir onaylandıktan sonra otomatik olarak proje oluştur
+    try:
+        from projects.models import Project
+        
+        # Proje oluştur
+        project = Project(
+            title=idea.title,
+            description=idea.description,
+            category=idea.category,
+            created_at=now,
+            is_approved=True,
+            is_completed=False,
+            project_owner=idea.owner_id,
+            status='active',
+            target_amount=idea.estimated_cost or 0,
+            current_amount=0
+        )
+        project.save()
+        
+        return JsonResponse({
+            'status': 'ok', 
+            'message': 'Fikir onaylandı ve proje oluşturuldu',
+            'project_id': str(project.id),
+            'idea_id': str(idea.id)
+        })
+    except Exception as e:
+        # Proje oluşturulamazsa bile fikir onaylanmış olur
+        print(f"Proje oluşturma hatası: {e}")
+        return JsonResponse({
+            'status': 'ok', 
+            'message': 'Fikir onaylandı (proje oluşturulamadı)',
+            'idea_id': str(idea.id)
+        })
 
 @csrf_exempt
 # PATCH /admin/ideas/<id>/reject
@@ -480,13 +514,16 @@ def idea_project_chat(request, idea_id):
     try:
         idea_obj_id = ObjectId(idea_id)
     except Exception:
-        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+        return JsonResponse({"status": "error", "message": "Geçersiz fikir ID"}, status=400)
     idea = Idea.objects(id=idea_obj_id).first()
     if not idea:
-        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+        return JsonResponse({"status": "error", "message": "Fikir bulunamadı"}, status=404)
+    
+    # Kullanıcının bu fikre katılım yetkisi var mı kontrol et
     jr = JoinRequest.objects(idea=idea, user=user, status="approved").first()
     if not jr:
-        return JsonResponse({"status": "error", "message": "Bu projeye katılımınız onaylanmamış"}, status=403)
+        return JsonResponse({"status": "error", "message": "Bu fikre katılımınız onaylanmamış"}, status=403)
+    
     if request.method == "POST":
         try:
             data = json.loads(request.body)
@@ -495,8 +532,11 @@ def idea_project_chat(request, idea_id):
                 return JsonResponse({"status": "error", "message": "Mesaj boş olamaz"}, status=400)
         except Exception:
             return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
-        ProjectMessage(idea=idea, sender=user, content=content).save()
+        
+        # Mesajı kaydet
+        ProjectMessage(idea=idea, user=user, content=content).save()
         return JsonResponse({"status": "ok", "message": "Mesaj gönderildi"})
+    
     elif request.method == "GET":
         page = int(request.GET.get("page", 1))
         limit = int(request.GET.get("limit", 20))
@@ -504,13 +544,14 @@ def idea_project_chat(request, idea_id):
         data = [{
             "id": str(msg.id),
             "sender": {
-                "id": str(msg.sender.id),
-                "name": msg.sender.full_name
+                "id": str(msg.user.id),
+                "name": msg.user.full_name
             },
             "content": msg.content,
             "timestamp": msg.timestamp.isoformat()
         } for msg in messages]
         return JsonResponse({"messages": data})
+    
     else:
         return JsonResponse({"status": "error", "message": "Yöntem desteklenmiyor"}, status=405)
 

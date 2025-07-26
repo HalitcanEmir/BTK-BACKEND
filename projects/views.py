@@ -10,6 +10,7 @@ import json
 from .models import InvestmentOffer
 from .models import ProjectLike
 from .utils import analyze_project, generate_project_suggestions, get_investment_advice
+from ideas.models import JoinRequest
 
 # Create your views here.
 
@@ -226,13 +227,15 @@ def completed_projects_list(request):
     print(f"DEBUG: completed parameter = {completed}")
     
     if completed == 'true':
-        # Sadece tamamlanmış projeleri getir
-        projects = Project.objects(is_completed=True)
+        # Sadece tamamlanmış projeleri getir (Biten Projeler)
+        projects = Project.objects(is_completed=True, status='completed')
         print(f"DEBUG: Found {projects.count()} completed projects")
+        list_type = "Biten Projeler"
     else:
         # Aktif projeleri getir (tamamlanmamış ve onaylanmış)
-        projects = Project.objects(is_approved=True, is_completed=False)
+        projects = Project.objects(is_approved=True, is_completed=False, status='active')
         print(f"DEBUG: Found {projects.count()} active projects")
+        list_type = "Aktif Projeler"
     
     data = []
     for project in projects:
@@ -240,17 +243,27 @@ def completed_projects_list(request):
             'id': str(project.id),
             'title': getattr(project, 'title', None),
             'description': getattr(project, 'description', None),
-            'team': getattr(project, 'team', []),  # varsa
+            'category': getattr(project, 'category', None),
+            'team_size': len(project.team_members) if project.team_members else 0,
             'completed_at': project.completed_at.isoformat() if project.completed_at else None,
             'success_label': getattr(project, 'success_label', None),
             'cover_image': getattr(project, 'cover_image', None),  # opsiyonel
             'story': getattr(project, 'story', None),  # opsiyonel
-            'is_completed': project.is_completed,  # Debug için ekle
+            'is_completed': project.is_completed,
+            'status': getattr(project, 'status', 'active'),
+            'project_owner': {
+                'id': str(project.project_owner.id),
+                'name': project.project_owner.full_name
+            } if project.project_owner else None
         }
         data.append(project_data)
-        print(f"DEBUG: Project {project.title} - is_completed: {project.is_completed}")
+        print(f"DEBUG: Project {project.title} - is_completed: {project.is_completed}, status: {project.status}")
     
-    return JsonResponse({'projects': data})
+    return JsonResponse({
+        'list_type': list_type,
+        'projects': data,
+        'total_count': len(data)
+    })
 
 def is_admin(user):
     return user and ('admin' in getattr(user, 'user_type', []) or 'admin' in getattr(user, 'roles', []))
@@ -266,10 +279,19 @@ def complete_project(request, id):
         return JsonResponse({'status': 'error', 'message': 'Geçersiz ID'}, status=400)
     if not project:
         return JsonResponse({'status': 'error', 'message': 'Proje bulunamadı'}, status=404)
+    
+    now = datetime.utcnow()
     project.is_completed = True
-    project.completed_at = datetime.utcnow()
+    project.completed_at = now
+    project.status = 'completed'  # Status'u da güncelle
     project.save()
-    return JsonResponse({'status': 'ok', 'message': 'Proje başarıyla tamamlandı'})
+    
+    return JsonResponse({
+        'status': 'ok', 
+        'message': 'Proje başarıyla tamamlandı ve "Biten Projeler" listesine eklendi',
+        'project_id': str(project.id),
+        'completed_at': now.isoformat()
+    })
 
 # YENİ ENDPOINT'LER
 
@@ -389,11 +411,18 @@ def approve_completion_request(request, project_id, request_id):
                 req.admin_response = 'Proje tamamlama isteği onaylandı'
                 
                 # Projeyi tamamlandı olarak işaretle
+                now = datetime.utcnow()
                 project.is_completed = True
-                project.completed_at = datetime.utcnow()
+                project.completed_at = now
+                project.status = 'completed'  # Status'u da güncelle
                 project.save()
                 
-                return JsonResponse({'status': 'ok', 'message': 'Proje tamamlama isteği onaylandı'})
+                return JsonResponse({
+                    'status': 'ok', 
+                    'message': 'Proje tamamlama isteği onaylandı ve proje "Biten Projeler" listesine eklendi',
+                    'project_id': str(project.id),
+                    'completed_at': now.isoformat()
+                })
             else:
                 return JsonResponse({'status': 'error', 'message': 'İstek zaten işlenmiş'}, status=400)
         else:
@@ -817,3 +846,252 @@ def get_user_project_suggestions(request):
         'user_name': user.full_name,
         'suggestions': suggestions
     })
+
+# PROJE BAŞVURU FONKSİYONLARI
+
+@csrf_exempt
+def project_join_request(request, id):
+    """Projeye katılım başvurusu gönderir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        message = data.get("message", "")
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    if project.is_completed:
+        return JsonResponse({"status": "error", "message": "Bu proje tamamlanmış, başvuru kabul edilmiyor"}, status=400)
+    
+    # Kullanıcı zaten ekip üyesi mi?
+    if user in project.team_members:
+        return JsonResponse({"status": "error", "message": "Zaten bu projenin ekibindesiniz"}, status=400)
+    
+    # Zaten başvuru yapmış mı?
+    existing_request = JoinRequest.objects(idea=None, project=project, user=user).first()
+    if existing_request:
+        return JsonResponse({"status": "error", "message": "Bu projeye zaten başvurdunuz"}, status=400)
+
+    # Yeni başvuru oluştur
+    join_request = JoinRequest(
+        idea=None,  # Fikir değil, proje başvurusu
+        project=project,
+        user=user,
+        message=message
+    )
+    join_request.save()
+    
+    return JsonResponse({
+        "status": "ok", 
+        "message": "Proje başvurunuz alındı",
+        "request_id": str(join_request.id)
+    })
+
+@csrf_exempt
+def project_join_request_status(request, id):
+    """Kullanıcının proje başvuru durumunu kontrol eder"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Kullanıcı zaten ekip üyesi mi?
+    if user in project.team_members:
+        return JsonResponse({
+            "has_applied": True, 
+            "status": "approved",
+            "message": "Proje ekibindesiniz"
+        })
+    
+    # Başvuru var mı?
+    join_request = JoinRequest.objects(idea=None, project=project, user=user).first()
+    if join_request:
+        return JsonResponse({
+            "has_applied": True, 
+            "status": join_request.status,
+            "message": join_request.message
+        })
+    else:
+        return JsonResponse({"has_applied": False})
+
+@csrf_exempt
+def admin_list_project_join_requests(request):
+    """Admin için proje başvurularını listeler"""
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    status_param = request.GET.get('status')
+    q = {'idea': None}  # Sadece proje başvuruları
+    if status_param:
+        q['status'] = status_param
+    
+    join_requests = JoinRequest.objects(**q)
+    data = []
+    
+    for jr in join_requests:
+        if jr.project:  # Proje başvurusu ise
+            data.append({
+                'id': str(jr.id),
+                'project_id': str(jr.project.id),
+                'project_title': jr.project.title,
+                'user_id': str(jr.user.id),
+                'user_name': jr.user.full_name,
+                'message': jr.message,
+                'status': jr.status,
+                'created_at': str(jr.created_at)
+            })
+    
+    return JsonResponse({
+        'status': 'ok', 
+        'join_requests': data,
+        'total_count': len(data)
+    })
+
+@csrf_exempt
+def admin_approve_project_join_request(request, request_id):
+    """Admin proje başvurusunu onaylar"""
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    try:
+        join_request = JoinRequest.objects(id=ObjectId(request_id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz başvuru ID'}, status=400)
+    
+    if not join_request or join_request.idea:  # Fikir başvurusu ise
+        return JsonResponse({'status': 'error', 'message': 'Proje başvurusu bulunamadı'}, status=404)
+    
+    if join_request.status != 'pending':
+        return JsonResponse({'status': 'error', 'message': 'Bu başvuru zaten işlenmiş'}, status=400)
+    
+    # Başvuruyu onayla
+    join_request.status = 'approved'
+    join_request.approved_by = user
+    join_request.approved_at = datetime.utcnow()
+    join_request.save()
+    
+    # Kullanıcıyı proje ekibine ekle
+    project = join_request.project
+    if not project.team_members:
+        project.team_members = []
+    project.team_members.append(join_request.user)
+    project.save()
+    
+    return JsonResponse({
+        'status': 'ok', 
+        'message': 'Proje başvurusu onaylandı ve kullanıcı ekibe eklendi',
+        'user_name': join_request.user.full_name,
+        'project_title': project.title
+    })
+
+@csrf_exempt
+def admin_reject_project_join_request(request, request_id):
+    """Admin proje başvurusunu reddeder"""
+    user = get_user_from_jwt(request)
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    try:
+        join_request = JoinRequest.objects(id=ObjectId(request_id)).first()
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz başvuru ID'}, status=400)
+    
+    if not join_request or join_request.idea:  # Fikir başvurusu ise
+        return JsonResponse({'status': 'error', 'message': 'Proje başvurusu bulunamadı'}, status=404)
+    
+    if join_request.status != 'pending':
+        return JsonResponse({'status': 'error', 'message': 'Bu başvuru zaten işlenmiş'}, status=400)
+    
+    # Başvuruyu reddet
+    join_request.status = 'rejected'
+    join_request.approved_by = user
+    join_request.approved_at = datetime.utcnow()
+    join_request.save()
+    
+    return JsonResponse({
+        'status': 'ok', 
+        'message': 'Proje başvurusu reddedildi',
+        'user_name': join_request.user.full_name,
+        'project_title': join_request.project.title
+    })
+
+# PROJE SOHBET FONKSİYONLARI
+
+@csrf_exempt
+def project_chat(request, id):
+    """Proje sohbeti - mesaj gönderme ve alma"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Kullanıcının bu projeye katılım yetkisi var mı kontrol et
+    is_project_owner = project.project_owner == user
+    is_team_member = user in project.team_members if project.team_members else False
+    is_admin_user = is_admin(user)
+    
+    if not (is_project_owner or is_team_member or is_admin_user):
+        return JsonResponse({"status": "error", "message": "Bu projeye erişim yetkiniz yok"}, status=403)
+    
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            content = data.get("content", "").strip()
+            if not content:
+                return JsonResponse({"status": "error", "message": "Mesaj boş olamaz"}, status=400)
+        except Exception:
+            return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+        
+        # Mesajı kaydet
+        from ideas.models import ProjectMessage
+        ProjectMessage(project=project, user=user, content=content).save()
+        return JsonResponse({"status": "ok", "message": "Mesaj gönderildi"})
+    
+    elif request.method == "GET":
+        page = int(request.GET.get("page", 1))
+        limit = int(request.GET.get("limit", 20))
+        
+        from ideas.models import ProjectMessage
+        messages = ProjectMessage.objects(project=project).order_by("-timestamp").skip((page-1)*limit).limit(limit)
+        data = [{
+            "id": str(msg.id),
+            "sender": {
+                "id": str(msg.user.id),
+                "name": msg.user.full_name
+            },
+            "content": msg.content,
+            "timestamp": msg.timestamp.isoformat()
+        } for msg in messages]
+        return JsonResponse({"messages": data})
+    
+    else:
+        return JsonResponse({"status": "error", "message": "Yöntem desteklenmiyor"}, status=405)

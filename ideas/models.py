@@ -40,7 +40,8 @@ class SwipeVote(Document):
     }
 
 class JoinRequest(Document):
-    idea = ReferenceField(Idea, required=True)
+    idea = ReferenceField(Idea, required=False)  # Fikir başvurusu için
+    project = ReferenceField('Project', required=False)  # Proje başvurusu için
     user = ReferenceField(User, required=True)
     message = StringField()
     status = StringField(default='pending')  # pending, approved, rejected
@@ -49,12 +50,14 @@ class JoinRequest(Document):
     approved_at = DateTimeField()
     meta = {
         'indexes': [
-            {'fields': ['idea', 'user'], 'unique': True}
+            {'fields': ['idea', 'user'], 'unique': True},
+            {'fields': ['project', 'user'], 'unique': True}
         ]
     }
 
 class ProjectMessage(Document):
-    idea = ReferenceField(Idea, required=True)
+    idea = ReferenceField(Idea, required=False)  # Fikir sohbeti için
+    project = ReferenceField('Project', required=False)  # Proje sohbeti için
     user = ReferenceField(User, required=True)
     content = StringField(required=True)
     timestamp = DateTimeField(default=datetime.datetime.utcnow)
