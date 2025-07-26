@@ -1,23 +1,20 @@
 from django.urls import path
-from .views import ideas_list, idea_detail, idea_apply_page, idea_apply, submit_idea, admin_list_pending_ideas, admin_approve_idea, admin_reject_idea, swipe_vote, join_request, join_request_status, admin_list_join_requests, admin_approve_join_request, admin_reject_join_request, idea_project_chat
+from . import views
 
 urlpatterns = [
-    path('submit-idea', submit_idea),
-    path('admin/ideas', admin_list_pending_ideas),  # GET /ideas/admin/ideas?status=pending
-    path('admin/ideas/<str:id>/approve', admin_approve_idea),  # PATCH /ideas/admin/ideas/:id/approve
-    path('admin/ideas/<str:id>/reject', admin_reject_idea),    # PATCH /ideas/admin/ideas/:id/reject
-    path('', ideas_list),
-    path('apply', idea_apply_page),
-    path('apply/submit', idea_apply),
-    path('<str:id>', idea_detail),
-    path('<str:id>/swipe', swipe_vote),
-    path('<str:idea_id>/join-request', join_request),
-    path('<str:idea_id>/join-requests/me', join_request_status),
-]
-
-urlpatterns += [
-    path('admin/project-join-requests', admin_list_join_requests),
-    path('admin/project-join-requests/<str:id>/approve', admin_approve_join_request),
-    path('admin/project-join-requests/<str:id>/reject', admin_reject_join_request),
-    path('<str:idea_id>/chat', idea_project_chat),
+    path('', views.ideas_list, name='ideas_list'),
+    path('submit-idea', views.submit_idea, name='submit_idea'),
+    path('<str:id>', views.idea_detail, name='idea_detail'),
+    path('<str:id>/swipe', views.swipe_vote, name='swipe_vote'),
+    path('<str:idea_id>/join-request', views.join_request, name='join_request'),
+    path('<str:idea_id>/join-requests/me', views.join_request_status, name='join_request_status'),
+    path('admin/ideas', views.admin_list_pending_ideas, name='admin_list_pending_ideas'),
+    path('admin/ideas/<str:id>/approve', views.admin_approve_idea, name='admin_approve_idea'),
+    path('admin/ideas/<str:id>/reject', views.admin_reject_idea, name='admin_reject_idea'),
+    path('admin/join-requests', views.admin_list_join_requests, name='admin_list_join_requests'),
+    path('admin/join-requests/<str:id>/approve', views.admin_approve_join_request, name='admin_approve_join_request'),
+    path('admin/join-requests/<str:id>/reject', views.admin_reject_join_request, name='admin_reject_join_request'),
+    path('<str:idea_id>/chat', views.idea_project_chat, name='idea_project_chat'),
+    path('analyze-project/', views.analyze_project_view, name='analyze_project'),
+    path('save-analysis/', views.save_project_analysis_view, name='save_project_analysis'),
 ] 

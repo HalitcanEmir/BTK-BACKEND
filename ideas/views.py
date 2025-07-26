@@ -10,6 +10,8 @@ from datetime import datetime
 from .models import SwipeVote
 from .models import JoinRequest
 from .models import ProjectMessage
+from .utils import analyze_project_with_gemini
+from .models import ProjectAnalysis
 
 # Create your views here.
 
@@ -260,20 +262,84 @@ def submit_idea(request):
         updated_at=now
     )
     idea.save()
+    
+    # Gemini ile proje analizi yap
+    try:
+        # Proje açıklamasını birleştir
+        project_description = f"Proje: {title}\n\nAçıklama: {description}"
+        if problem:
+            project_description += f"\n\nProblem: {problem}"
+        if solution:
+            project_description += f"\n\nÇözüm: {solution}"
+        
+        # Gemini analizi
+        analysis_result = analyze_project_with_gemini(project_description)
+        
+        if 'error' not in analysis_result:
+            # Analiz sonucunu kaydet
+            project_analysis = ProjectAnalysis(
+                idea=idea,
+                technologies=analysis_result.get('technologies', []),
+                skill_level=analysis_result.get('skill_level', ''),
+                team_size=analysis_result.get('team_size', 0),
+                roles=analysis_result.get('roles', []),
+                estimated_duration=analysis_result.get('estimated_duration', ''),
+                notes=analysis_result.get('notes', ''),
+                created_at=now
+            )
+            project_analysis.save()
+            
+            # Response'a analiz bilgilerini ekle
+            idea_data = {
+                'id': str(idea.id),
+                'title': idea.title,
+                'status': idea.status,
+                'owner_id': str(user.id),
+                'license_accepted': idea.license_accepted,
+                'license_accepted_at': str(idea.license_accepted_at),
+                'owner_share_percent': idea.owner_share_percent,
+                'created_at': str(idea.created_at),
+                'project_analysis': {
+                    'technologies': analysis_result.get('technologies', []),
+                    'skill_level': analysis_result.get('skill_level', ''),
+                    'team_size': analysis_result.get('team_size', 0),
+                    'roles': analysis_result.get('roles', []),
+                    'estimated_duration': analysis_result.get('estimated_duration', ''),
+                    'notes': analysis_result.get('notes', '')
+                }
+            }
+        else:
+            # Analiz başarısız olsa bile idea kaydedildi
+            idea_data = {
+                'id': str(idea.id),
+                'title': idea.title,
+                'status': idea.status,
+                'owner_id': str(user.id),
+                'license_accepted': idea.license_accepted,
+                'license_accepted_at': str(idea.license_accepted_at),
+                'owner_share_percent': idea.owner_share_percent,
+                'created_at': str(idea.created_at),
+                'analysis_error': analysis_result.get('error', 'Analiz yapılamadı')
+            }
+    except Exception as e:
+        # Analiz hatası olsa bile idea kaydedildi
+        idea_data = {
+            'id': str(idea.id),
+            'title': idea.title,
+            'status': idea.status,
+            'owner_id': str(user.id),
+            'license_accepted': idea.license_accepted,
+            'license_accepted_at': str(idea.license_accepted_at),
+            'owner_share_percent': idea.owner_share_percent,
+            'created_at': str(idea.created_at),
+            'analysis_error': f'Analiz hatası: {str(e)}'
+        }
+    
     # Kullanıcıya fikir_sahibi rolü ekle (yoksa)
     if 'fikir_sahibi' not in user.user_type:
         user.user_type.append('fikir_sahibi')
         user.save()
-    idea_data = {
-        'id': str(idea.id),
-        'title': idea.title,
-        'status': idea.status,
-        'owner_id': str(user.id),
-        'license_accepted': idea.license_accepted,
-        'license_accepted_at': str(idea.license_accepted_at),
-        'owner_share_percent': idea.owner_share_percent,
-        'created_at': str(idea.created_at)
-    }
+    
     return JsonResponse({'status': 'ok', 'idea': idea_data})
 
 @csrf_exempt
@@ -447,3 +513,90 @@ def idea_project_chat(request, idea_id):
         return JsonResponse({"messages": data})
     else:
         return JsonResponse({"status": "error", "message": "Yöntem desteklenmiyor"}, status=405)
+
+@csrf_exempt
+def analyze_project_view(request):
+    """Proje açıklamasını Gemini ile analiz et"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            project_description = data.get('description')
+            
+            if not project_description:
+                return JsonResponse({'error': 'Proje açıklaması gerekli.'}, status=400)
+            
+            # Gemini ile analiz et
+            analysis_result = analyze_project_with_gemini(project_description)
+            
+            if 'error' in analysis_result:
+                return JsonResponse({
+                    'success': False,
+                    'error': analysis_result['error']
+                }, status=400)
+            
+            # Analiz sonucunu döndür
+            return JsonResponse({
+                'success': True,
+                'analysis': analysis_result
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Geçersiz JSON formatı.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'Sunucu hatası: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
+
+@csrf_exempt
+def save_project_analysis_view(request):
+    """Proje analizini veritabanına kaydet"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            idea_id = data.get('idea_id')
+            analysis_data = data.get('analysis')
+            
+            if not idea_id or not analysis_data:
+                return JsonResponse({'error': 'Idea ID ve analiz verisi gerekli.'}, status=400)
+            
+            # Idea'yı bul
+            idea = Idea.objects.get(id=idea_id)
+            
+            # ProjectAnalysis oluştur veya güncelle
+            analysis, created = ProjectAnalysis.objects.get_or_create(
+                idea=idea,
+                defaults={
+                    'technologies': analysis_data.get('technologies', []),
+                    'skill_level': analysis_data.get('skill_level', ''),
+                    'team_size': analysis_data.get('team_size', 0),
+                    'roles': analysis_data.get('roles', []),
+                    'estimated_duration': analysis_data.get('estimated_duration', ''),
+                    'notes': analysis_data.get('notes', ''),
+                    'created_at': datetime.datetime.utcnow()
+                }
+            )
+            
+            if not created:
+                # Mevcut analizi güncelle
+                analysis.technologies = analysis_data.get('technologies', [])
+                analysis.skill_level = analysis_data.get('skill_level', '')
+                analysis.team_size = analysis_data.get('team_size', 0)
+                analysis.roles = analysis_data.get('roles', [])
+                analysis.estimated_duration = analysis_data.get('estimated_duration', '')
+                analysis.notes = analysis_data.get('notes', '')
+                analysis.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Proje analizi başarıyla kaydedildi.',
+                'analysis_id': str(analysis.id)
+            })
+            
+        except Idea.DoesNotExist:
+            return JsonResponse({'error': 'Idea bulunamadı.'}, status=404)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Geçersiz JSON formatı.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'Sunucu hatası: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
