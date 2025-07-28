@@ -21,6 +21,10 @@ urlpatterns = [
     path('verify-email-and-register', views.verify_email_and_register, name='verify_email_and_register'),
     path('resend-verification-code', views.resend_verification_code, name='resend_verification_code'),
     path('test-email-settings', views.test_email_settings, name='test_email_settings'),
+    # Şifre sıfırlama endpoint'leri
+    path('send-password-reset-code', views.send_password_reset_code, name='send_password_reset_code'),
+    path('verify-reset-code-and-change-password', views.verify_reset_code_and_change_password, name='verify_reset_code_and_change_password'),
+    path('resend-password-reset-code', views.resend_password_reset_code, name='resend_password_reset_code'),
 ]
 
 urlpatterns += [

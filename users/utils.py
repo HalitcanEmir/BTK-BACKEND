@@ -676,3 +676,48 @@ def get_email_settings_info():
         'port': SMTP_PORT,
         'username': SMTP_USERNAME
     } 
+
+def send_password_reset_email(email, reset_code):
+    """Şifre sıfırlama email'i gönderir"""
+    try:
+        from config.settings import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+        
+        # Email içeriği
+        subject = "BTK Backend - Şifre Sıfırlama Kodu"
+        body = f"""
+        Merhaba!
+        
+        Şifrenizi sıfırlamak için kodunuz: {reset_code}
+        
+        Bu kod 10 dakika geçerlidir.
+        
+        Eğer bu işlemi siz yapmadıysanız, bu email'i görmezden gelebilirsiniz.
+        
+        Saygılarımızla,
+        BTK Backend Ekibi
+        """
+        
+        # Email oluştur
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # SMTP bağlantısı
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        
+        # Email gönder
+        text = msg.as_string()
+        server.sendmail(SMTP_USERNAME, email, text)
+        server.quit()
+        
+        print(f"✅ Şifre sıfırlama email'i gönderildi: {email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Şifre sıfırlama email hatası: {str(e)}")
+        return False 

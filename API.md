@@ -220,8 +220,7 @@
     {"id": "665f1c2e8b3e2a1a2b3c4d5e", "name": "Ali", "age": 30},
     {"id": "665f1c2e8b3e2a1a2b3c4d5f", "name": "Ayşe", "age": 25}
   ]
-}
-``` 
+} 
 
 ---
 
@@ -861,6 +860,44 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 }
 ```
 
+### Kullanıcı Kaydı (Email Doğrulama ile)
+
+**Endpoint:** `POST /api/auth/register`
+
+**Açıklama:** Kullanıcı kaydı yapar ve email doğrulama kodu gönderir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword123",
+  "full_name": "John Doe",
+  "user_type": ["developer"],
+  "github_token": "optional",
+  "linkedin_token": "optional",
+  "card_token": "optional"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Email doğrulama kodu gönderildi. Lütfen email'inizi kontrol edin.",
+  "user": {
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "user_type": ["developer"],
+    "message": "Email doğrulama kodu gönderildi. Lütfen email'inizi kontrol edin."
+  },
+  "requires_verification": true
+}
+```
+
+**Not:** Bu endpoint artık doğrudan kullanıcı oluşturmaz, sadece email doğrulama kodu gönderir. Kullanıcı kaydı için `/verify-email-and-register` endpoint'ini kullanın.
+
+---
+
 ### Email Doğrulama ve Kayıt
 
 **Endpoint:** `POST /api/auth/verify-email-and-register`
@@ -911,6 +948,80 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 {
   "status": "ok",
   "message": "Yeni doğrulama kodu gönderildi",
+  "email": "user@example.com"
+}
+```
+
+--- 
+
+### Şifre Sıfırlama Kodu Gönderme
+
+**Endpoint:** `POST /api/auth/send-password-reset-code`
+
+**Açıklama:** Email adresine şifre sıfırlama kodu gönderir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Şifre sıfırlama kodu email adresinize gönderildi. Lütfen email'inizi kontrol edin.",
+  "email": "user@example.com"
+}
+```
+
+### Şifre Sıfırlama Kodu Doğrulama ve Şifre Değiştirme
+
+**Endpoint:** `POST /api/auth/verify-reset-code-and-change-password`
+
+**Açıklama:** Sıfırlama kodunu doğrular ve yeni şifre belirler.
+
+**Body:**
+```json
+{
+  "email": "user@example.com",
+  "reset_code": "123456",
+  "new_password": "yenişifre123"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Şifreniz başarıyla güncellendi!",
+  "user": {
+    "id": "507f1f77bcf86cd799439011",
+    "email": "user@example.com",
+    "full_name": "John Doe"
+  }
+}
+```
+
+### Şifre Sıfırlama Kodunu Tekrar Gönderme
+
+**Endpoint:** `POST /api/auth/resend-password-reset-code`
+
+**Açıklama:** Şifre sıfırlama kodunu tekrar gönderir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Yeni şifre sıfırlama kodu gönderildi. Lütfen email'inizi kontrol edin.",
   "email": "user@example.com"
 }
 ```

@@ -69,3 +69,19 @@ class EmailVerification(Document):
             {'fields': ['expires_at']}
         ]
     }
+
+class PasswordReset(Document):
+    """Şifre sıfırlama kodları"""
+    email = StringField(required=True)
+    reset_code = StringField(required=True, max_length=6)
+    is_used = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    expires_at = DateTimeField(required=True)
+    
+    meta = {
+        'indexes': [
+            {'fields': ['email', 'reset_code']},
+            {'fields': ['email', 'is_used']},
+            {'fields': ['expires_at']}
+        ]
+    }

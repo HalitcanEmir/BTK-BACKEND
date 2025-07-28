@@ -3,8 +3,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.http import JsonResponse
 import json
-from .models import User
-from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match
+from .models import User, EmailVerification, PasswordReset
+from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match, generate_verification_code, send_verification_email, send_welcome_email, send_password_reset_email
 import jwt
 from django.conf import settings
 from .forms import IDCardForm, CVUploadForm
@@ -15,7 +15,6 @@ from mongoengine.errors import DoesNotExist
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from .models import EmailVerification
-from .utils import generate_verification_code, send_verification_email, send_welcome_email
 from datetime import datetime, timedelta
 import re
 
@@ -129,71 +128,78 @@ def login(request):
 
 # Kayıt Ol
 # POST /api/auth/register
-# Açıklama: Yeni kullanıcı kaydı
+# Açıklama: Yeni kullanıcı kaydı - Email doğrulama kodu gönderir
 @csrf_exempt
-# Kullanıcı kaydı
-# POST /api/auth/register
-# Body: {"email": ..., "password": ..., "full_name": ..., "user_type": [...], "github_token": ..., "linkedin_token": ..., "card_token": ...}
-# Response örneği: {"status": "ok", "jwt": "...", "user": {...}}
 def register(request):
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+    
     try:
         data = json.loads(request.body)
-        email = data.get('email')
-        password = data.get('password')
-        full_name = data.get('full_name')
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        full_name = data.get('full_name', '').strip()
         user_type = data.get('user_type', [])
         github_token = data.get('github_token')
         linkedin_token = data.get('linkedin_token')
         card_token = data.get('card_token')
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
-    if not email or not password or not user_type:
-        return JsonResponse({'status': 'error', 'message': 'Zorunlu alanlar eksik'})
-    if User.objects(email=email).first():
-        return JsonResponse({'status': 'error', 'message': 'Bu e-posta ile kayıtlı kullanıcı var'})
-    # Şifreyi hashle
-    password_hash = hash_password(password)
-    # Doğrulama alanları
-    github_verified = False
-    linkedin_verified = False
-    can_invest = False
-    # Geliştirici ise token doğrulama (mock)
-    if 'developer' in user_type:
-        github_verified = bool(github_token)
-        linkedin_verified = bool(linkedin_token)
-    # Yatırımcı ise kart doğrulama (mock)
-    if 'investor' in user_type:
-        can_invest = bool(card_token)
-    user = User(
+    
+    # Validasyon
+    if not email or not password or not full_name:
+        return JsonResponse({'status': 'error', 'message': 'Email, şifre ve tam ad zorunludur'})
+    
+    if len(password) < 6:
+        return JsonResponse({'status': 'error', 'message': 'Şifre en az 6 karakter olmalı'})
+    
+    # Email formatını kontrol et
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz email formatı'})
+    
+    # Email zaten kayıtlı mı kontrol et
+    existing_user = User.objects(email=email).first()
+    if existing_user:
+        return JsonResponse({'status': 'error', 'message': 'Bu email adresi zaten kayıtlı'})
+    
+    # Email doğrulama kodu oluştur ve gönder
+    verification_code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    # Veritabanına kaydet
+    verification = EmailVerification(
         email=email,
-        password_hash=password_hash,
-        full_name=full_name,
-        user_type=user_type,
-        github_verified=github_verified,
-        linkedin_verified=linkedin_verified,
-        can_invest=can_invest,
-        created_at=timezone.now()
+        verification_code=verification_code,
+        expires_at=expires_at
     )
-    user.save()
-    # JWT üret
-    payload = {
-        'email': user.email,
-        'user_type': user.user_type,
-        'exp': timezone.now() + timezone.timedelta(days=7)
+    verification.save()
+    
+    # Email gönder
+    email_sent = send_verification_email(email, verification_code)
+    
+    if not email_sent:
+        # Email gönderilemezse veritabanından sil
+        verification.delete()
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Email gönderilemedi. Lütfen tekrar deneyin.'
+        }, status=500)
+    
+    # Geçici kullanıcı bilgilerini döndür (henüz kayıt olmadı)
+    temp_user_data = {
+        'email': email,
+        'full_name': full_name,
+        'user_type': user_type,
+        'message': 'Email doğrulama kodu gönderildi. Lütfen email\'inizi kontrol edin.'
     }
-    token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    user_data = {
-        'email': user.email,
-        'full_name': user.full_name,
-        'user_type': user.user_type,
-        'github_verified': user.github_verified,
-        'linkedin_verified': user.linkedin_verified,
-        'can_invest': user.can_invest,
-        'created_at': str(user.created_at)
-    }
-    return JsonResponse({'status': 'ok', 'jwt': token, 'user': user_data})
+    
+    return JsonResponse({
+        'status': 'ok', 
+        'message': 'Email doğrulama kodu gönderildi. Lütfen email\'inizi kontrol edin.',
+        'user': temp_user_data,
+        'requires_verification': True
+    })
 
 # E-posta Doğrulama
 # GET /api/auth/verify-email
@@ -1345,6 +1351,171 @@ def resend_verification_code(request):
         })
     else:
         verification.delete()
+        return JsonResponse({
+            "status": "error",
+            "message": "Email gönderilemedi. Lütfen tekrar deneyin."
+        }, status=500)
+
+@csrf_exempt
+def send_password_reset_code(request):
+    """Şifre sıfırlama kodu gönderir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not email:
+        return JsonResponse({"status": "error", "message": "Email adresi gerekli"}, status=400)
+    
+    # Email formatını kontrol et
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return JsonResponse({"status": "error", "message": "Geçersiz email formatı"}, status=400)
+    
+    # Kullanıcı var mı kontrol et
+    user = User.objects(email=email).first()
+    if not user:
+        return JsonResponse({"status": "error", "message": "Bu email adresi ile kayıtlı kullanıcı bulunamadı"}, status=400)
+    
+    # Yeni sıfırlama kodu oluştur
+    reset_code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    # Veritabanına kaydet
+    password_reset = PasswordReset(
+        email=email,
+        reset_code=reset_code,
+        expires_at=expires_at
+    )
+    password_reset.save()
+    
+    # Email gönder
+    email_sent = send_password_reset_email(email, reset_code)
+    
+    if email_sent:
+        return JsonResponse({
+            "status": "ok",
+            "message": "Şifre sıfırlama kodu email adresinize gönderildi. Lütfen email'inizi kontrol edin.",
+            "email": email
+        })
+    else:
+        # Email gönderilemezse veritabanından sil
+        password_reset.delete()
+        return JsonResponse({
+            "status": "error",
+            "message": "Email gönderilemedi. Lütfen tekrar deneyin."
+        }, status=500)
+
+@csrf_exempt
+def verify_reset_code_and_change_password(request):
+    """Sıfırlama kodunu doğrular ve şifreyi değiştirir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        reset_code = data.get('reset_code', '').strip()
+        new_password = data.get('new_password', '')
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    # Validasyon
+    if not all([email, reset_code, new_password]):
+        return JsonResponse({"status": "error", "message": "Tüm alanlar gerekli"}, status=400)
+    
+    if len(new_password) < 6:
+        return JsonResponse({"status": "error", "message": "Şifre en az 6 karakter olmalı"}, status=400)
+    
+    # Sıfırlama kodunu kontrol et
+    password_reset = PasswordReset.objects(
+        email=email,
+        reset_code=reset_code,
+        is_used=False,
+        expires_at__gt=datetime.utcnow()
+    ).first()
+    
+    if not password_reset:
+        return JsonResponse({"status": "error", "message": "Geçersiz veya süresi dolmuş sıfırlama kodu"}, status=400)
+    
+    # Kullanıcıyı bul
+    user = User.objects(email=email).first()
+    if not user:
+        return JsonResponse({"status": "error", "message": "Kullanıcı bulunamadı"}, status=400)
+    
+    try:
+        # Şifreyi güncelle
+        hashed_password = hash_password(new_password)
+        user.password_hash = hashed_password
+        user.save()
+        
+        # Sıfırlama kodunu kullanıldı olarak işaretle
+        password_reset.is_used = True
+        password_reset.save()
+        
+        return JsonResponse({
+            "status": "ok",
+            "message": "Şifreniz başarıyla güncellendi!",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Şifre güncellenirken hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+def resend_password_reset_code(request):
+    """Şifre sıfırlama kodunu tekrar gönderir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not email:
+        return JsonResponse({"status": "error", "message": "Email adresi gerekli"}, status=400)
+    
+    # Kullanıcı var mı kontrol et
+    user = User.objects(email=email).first()
+    if not user:
+        return JsonResponse({"status": "error", "message": "Bu email adresi ile kayıtlı kullanıcı bulunamadı"}, status=400)
+    
+    # Yeni kod oluştur
+    reset_code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    password_reset = PasswordReset(
+        email=email,
+        reset_code=reset_code,
+        expires_at=expires_at
+    )
+    password_reset.save()
+    
+    # Email gönder
+    email_sent = send_password_reset_email(email, reset_code)
+    
+    if email_sent:
+        return JsonResponse({
+            "status": "ok",
+            "message": "Yeni şifre sıfırlama kodu gönderildi. Lütfen email'inizi kontrol edin.",
+            "email": email
+        })
+    else:
+        password_reset.delete()
         return JsonResponse({
             "status": "error",
             "message": "Email gönderilemedi. Lütfen tekrar deneyin."
