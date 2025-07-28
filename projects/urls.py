@@ -15,7 +15,9 @@ from .views import (
     mark_notification_as_read, calculate_user_performance_score,
     get_team_performance_leaderboard, update_task_progress,
     get_user_task_dashboard, get_task_notifications_advanced,
-    get_user_performance_analytics, debug_users_list
+    get_user_performance_analytics, debug_users_list,
+    generate_project_timeline_with_gemini, get_project_timeline,
+    get_user_timeline_contribution
 )
 
 urlpatterns = [
@@ -83,4 +85,8 @@ urlpatterns = [
     path('<str:id>', project_detail),
     # Debug endpoint'leri
     path('debug/users', debug_users_list),
+    # Timeline endpoint'leri
+    path('<str:id>/generate-timeline', generate_project_timeline_with_gemini),
+    path('<str:id>/timeline', get_project_timeline),
+    path('timeline/contribution', get_user_timeline_contribution),
 ] 

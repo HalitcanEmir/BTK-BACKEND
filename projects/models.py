@@ -77,6 +77,60 @@ class TaskLog(Document):
         ]
     }
 
+class ProjectTimeline(Document):
+    """Proje timeline analizi"""
+    project = ReferenceField('Project', required=True)
+    mvp_deadline = DateTimeField(required=True)
+    full_project_deadline = DateTimeField(required=True)
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.datetime.utcnow)
+    created_by = ReferenceField('User', required=True)
+    
+    # Analiz sonuçları
+    total_tasks = IntField(default=0)
+    completed_tasks = IntField(default=0)
+    pending_tasks = IntField(default=0)
+    risk_level = StringField(choices=['low', 'medium', 'high', 'critical'], default='low')
+    
+    meta = {
+        'indexes': [
+            {'fields': ['project']},
+            {'fields': ['mvp_deadline']},
+            {'fields': ['full_project_deadline']}
+        ]
+    }
+
+class ProjectMilestone(Document):
+    """Proje milestone'ları"""
+    timeline = ReferenceField(ProjectTimeline, required=True)
+    date = DateTimeField(required=True)
+    description = StringField(required=True)
+    milestone_type = StringField(choices=['mvp', 'development', 'testing', 'deployment', 'launch'], default='development')
+    status = StringField(choices=['pending', 'completed', 'delayed'], default='pending')
+    completed_at = DateTimeField()
+    
+    meta = {
+        'indexes': [
+            {'fields': ['timeline', 'date']},
+            {'fields': ['status']}
+        ]
+    }
+
+class ProjectRisk(Document):
+    """Proje risk analizi"""
+    timeline = ReferenceField(ProjectTimeline, required=True)
+    task_title = StringField(required=True)
+    reason = StringField(required=True)
+    risk_level = StringField(choices=['low', 'medium', 'high', 'critical'], default='medium')
+    mitigation_strategy = StringField()
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    
+    meta = {
+        'indexes': [
+            {'fields': ['timeline', 'risk_level']}
+        ]
+    }
+
 class Project(Document):
     title = StringField(required=True)
     description = StringField()

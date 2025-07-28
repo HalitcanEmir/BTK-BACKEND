@@ -21,6 +21,7 @@ from mongoengine import DoesNotExist
 from users.models import User
 from ideas.models import JoinRequest
 from .models import Project, ProjectTask, TaskLog
+from .models import ProjectTimeline, ProjectMilestone, ProjectRisk
 
 # Create your views here.
 
@@ -2356,4 +2357,391 @@ def debug_users_list(request):
         'status': 'ok',
         'users': users_data,
         'total_count': len(users_data)
+    })
+
+@csrf_exempt
+def generate_project_timeline_with_gemini(request, id):
+    """Gemini AI ile proje timeline analizi yapar"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Projeye ait görevleri al
+    project_tasks = ProjectTask.objects(project=project).order_by('start_date')
+    
+    if not project_tasks:
+        return JsonResponse({"status": "error", "message": "Bu proje için henüz görev oluşturulmamış"}, status=400)
+    
+    # Görev verilerini hazırla
+    tasks_data = []
+    for task in project_tasks:
+        tasks_data.append({
+            "title": task.title,
+            "assigned_to": task.assigned_user.full_name,
+            "start_date": task.start_date.strftime('%Y-%m-%d'),
+            "end_date": task.end_date.strftime('%Y-%m-%d'),
+            "duration_days": task.duration_days,
+            "status": task.status,
+            "priority": task.priority,
+            "description": task.description,
+            "is_overdue": task.is_overdue,
+            "progress_percentage": task.progress_percentage
+        })
+    
+    # Gemini'ye gönderilecek veri
+    gemini_data = {
+        "project_name": project.title,
+        "project_description": project.description,
+        "tasks": tasks_data
+    }
+    
+    # Gemini AI'ya gönder
+    try:
+        gemini_response = send_to_gemini_for_timeline_analysis(gemini_data)
+        
+        if gemini_response.get('status') == 'success':
+            # Timeline'ı veritabanına kaydet
+            timeline_created, errors = save_timeline_to_database(project, gemini_response['timeline'], user)
+            
+            return JsonResponse({
+                "status": "ok",
+                "message": f"Proje timeline analizi tamamlandı. MVP: {gemini_response['timeline'].get('mvp_deadline')}",
+                "timeline": gemini_response['timeline'],
+                "total_tasks": len(tasks_data),
+                "timeline_id": timeline_created
+            })
+        else:
+            return JsonResponse({
+                "status": "error",
+                "message": "Gemini AI'dan timeline yanıtı alınamadı",
+                "error": gemini_response.get('error', 'Bilinmeyen hata')
+            }, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Timeline analizi sırasında hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+def send_to_gemini_for_timeline_analysis(data):
+    """Gemini AI'ya timeline analizi için veri gönderir"""
+    import google.generativeai as genai
+    import json
+    import re
+    from django.conf import settings
+    
+    def clean_gemini_json(raw_text):
+        """Gemini'den dönen cevaptaki kod bloğu işaretlerini temizle"""
+        cleaned = re.sub(r"^```json|^```|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+        return cleaned
+    
+    try:
+        # Gemini AI'yı yapılandır
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Prompt hazırla
+        prompt = f"""
+        Sen bir proje yöneticisisin. Aşağıdaki yazılım projesine ait görevleri analiz ederek timeline çıkar.
+
+        PROJE BİLGİLERİ:
+        - Proje Adı: {data['project_name']}
+        - Proje Açıklaması: {data['project_description']}
+
+        GÖREVLER:
+        """
+        
+        for task in data['tasks']:
+            prompt += f"""
+        - {task['title']}:
+          * Sorumlu: {task['assigned_to']}
+          * Tarih: {task['start_date']} - {task['end_date']} ({task['duration_days']} gün)
+          * Durum: {task['status']}
+          * Öncelik: {task['priority']}
+          * İlerleme: %{task['progress_percentage']}
+          * Gecikme: {'Evet' if task['is_overdue'] else 'Hayır'}
+            """
+        
+        prompt += f"""
+
+        GÖREV:
+        Bu görevlere göre şunları analiz et:
+
+        1. MVP süreci ne zaman tamamlanır?
+        2. Tüm proje ne zaman biter?
+        3. Hangi tarihlerde hangi aşamaya ulaşılır?
+        4. Hangi görevlerde risk var?
+
+        KURALLAR:
+        - MVP: Temel özelliklerin çalışır hali
+        - Milestone'lar mantıklı sırayla olmalı
+        - Risk analizi: Gecikme, karmaşıklık, kaynak eksikliği
+        - Tarihler YYYY-MM-DD formatında olmalı
+
+        SADECE JSON formatında yanıtla:
+
+        {{
+          "mvp_deadline": "2025-08-05",
+          "full_project_deadline": "2025-08-14",
+          "milestone_list": [
+            {{
+              "date": "2025-07-30",
+              "description": "Backend API sistemi tamamlandı",
+              "type": "development"
+            }},
+            {{
+              "date": "2025-08-05",
+              "description": "MVP hazır - temel özellikler çalışıyor",
+              "type": "mvp"
+            }},
+            {{
+              "date": "2025-08-14",
+              "description": "Tüm proje tamamlandı",
+              "type": "launch"
+            }}
+          ],
+          "riskli_gorevler": [
+            {{
+              "title": "Kullanıcı arayüzü geliştirme",
+              "reason": "Frontend geliştiricinin günlük çalışma süresi yetersiz olabilir",
+              "risk_level": "medium"
+            }}
+          ]
+        }}
+        """
+        
+        response = model.generate_content(prompt)
+        
+        if not response.text or response.text.strip() == "":
+            return {
+                "status": "error",
+                "error": "Gemini boş cevap döndü"
+            }
+        
+        # Response'u parse et
+        try:
+            cleaned_text = clean_gemini_json(response.text)
+            timeline_data = json.loads(cleaned_text)
+            
+            return {
+                "status": "success",
+                "timeline": timeline_data
+            }
+            
+        except json.JSONDecodeError as e:
+            return {
+                "status": "error",
+                "error": f"Gemini'den gelen yanıt JSON formatında değil: {str(e)}",
+                "raw_response": response.text[:500]
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Gemini API hatası: {str(e)}"
+        }
+
+def save_timeline_to_database(project, timeline_data, admin_user):
+    """Gemini'den gelen timeline'ı veritabanına kaydeder"""
+    try:
+        # Timeline oluştur
+        timeline = ProjectTimeline(
+            project=project,
+            mvp_deadline=datetime.strptime(timeline_data['mvp_deadline'], '%Y-%m-%d'),
+            full_project_deadline=datetime.strptime(timeline_data['full_project_deadline'], '%Y-%m-%d'),
+            created_by=admin_user,
+            total_tasks=len(ProjectTask.objects(project=project)),
+            completed_tasks=len(ProjectTask.objects(project=project, status='done')),
+            pending_tasks=len(ProjectTask.objects(project=project, status__in=['to-do', 'in-progress']))
+        )
+        timeline.save()
+        
+        # Milestone'ları kaydet
+        for milestone_data in timeline_data.get('milestone_list', []):
+            milestone = ProjectMilestone(
+                timeline=timeline,
+                date=datetime.strptime(milestone_data['date'], '%Y-%m-%d'),
+                description=milestone_data['description'],
+                milestone_type=milestone_data.get('type', 'development')
+            )
+            milestone.save()
+        
+        # Riskleri kaydet
+        for risk_data in timeline_data.get('riskli_gorevler', []):
+            risk = ProjectRisk(
+                timeline=timeline,
+                task_title=risk_data['title'],
+                reason=risk_data['reason'],
+                risk_level=risk_data.get('risk_level', 'medium')
+            )
+            risk.save()
+        
+        return str(timeline.id), []
+        
+    except Exception as e:
+        return None, [f"Timeline kaydedilirken hata: {str(e)}"]
+
+@csrf_exempt
+def get_project_timeline(request, id):
+    """Proje timeline'ını getirir"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Timeline'ı al
+    timeline = ProjectTimeline.objects(project=project).order_by('-created_at').first()
+    
+    if not timeline:
+        return JsonResponse({
+            "status": "error", 
+            "message": "Bu proje için henüz timeline analizi yapılmamış"
+        }, status=404)
+    
+    # Milestone'ları al
+    milestones = ProjectMilestone.objects(timeline=timeline).order_by('date')
+    milestones_data = []
+    for milestone in milestones:
+        milestones_data.append({
+            'id': str(milestone.id),
+            'date': milestone.date.strftime('%Y-%m-%d'),
+            'description': milestone.description,
+            'type': milestone.milestone_type,
+            'status': milestone.status,
+            'completed_at': milestone.completed_at.strftime('%Y-%m-%d') if milestone.completed_at else None
+        })
+    
+    # Riskleri al
+    risks = ProjectRisk.objects(timeline=timeline).order_by('-risk_level')
+    risks_data = []
+    for risk in risks:
+        risks_data.append({
+            'id': str(risk.id),
+            'task_title': risk.task_title,
+            'reason': risk.reason,
+            'risk_level': risk.risk_level,
+            'mitigation_strategy': risk.mitigation_strategy
+        })
+    
+    # Görev istatistikleri
+    tasks = ProjectTask.objects(project=project)
+    task_stats = {
+        'total_tasks': len(tasks),
+        'completed_tasks': len([t for t in tasks if t.status == 'done']),
+        'in_progress_tasks': len([t for t in tasks if t.status == 'in-progress']),
+        'overdue_tasks': len([t for t in tasks if t.is_overdue and t.status != 'done']),
+        'avg_progress': sum([t.progress_percentage for t in tasks]) / len(tasks) if tasks else 0
+    }
+    
+    return JsonResponse({
+        'status': 'ok',
+        'project_title': project.title,
+        'timeline': {
+            'id': str(timeline.id),
+            'mvp_deadline': timeline.mvp_deadline.strftime('%Y-%m-%d'),
+            'full_project_deadline': timeline.full_project_deadline.strftime('%Y-%m-%d'),
+            'created_at': timeline.created_at.strftime('%Y-%m-%d'),
+            'risk_level': timeline.risk_level,
+            'total_tasks': timeline.total_tasks,
+            'completed_tasks': timeline.completed_tasks,
+            'pending_tasks': timeline.pending_tasks
+        },
+        'milestones': milestones_data,
+        'risks': risks_data,
+        'task_stats': task_stats
+    })
+
+@csrf_exempt
+def get_user_timeline_contribution(request):
+    """Kullanıcının timeline katkısını getirir"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    # Kullanıcının görevlerini al
+    user_tasks = ProjectTask.objects(assigned_user=user).order_by('end_date')
+    
+    if not user_tasks:
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Henüz görev atanmamış',
+            'timeline_contribution': []
+        })
+    
+    # Proje bazında grupla
+    project_contributions = {}
+    for task in user_tasks:
+        project_id = str(task.project.id)
+        if project_id not in project_contributions:
+            project_contributions[project_id] = {
+                'project_title': task.project.title,
+                'project_id': project_id,
+                'tasks': [],
+                'total_duration': 0,
+                'completed_tasks': 0,
+                'overdue_tasks': 0
+            }
+        
+        project_contributions[project_id]['tasks'].append({
+            'id': str(task.id),
+            'title': task.title,
+            'start_date': task.start_date.strftime('%Y-%m-%d'),
+            'end_date': task.end_date.strftime('%Y-%m-%d'),
+            'duration_days': task.duration_days,
+            'status': task.status,
+            'progress_percentage': task.progress_percentage,
+            'is_overdue': task.is_overdue
+        })
+        
+        project_contributions[project_id]['total_duration'] += task.duration_days
+        if task.status == 'done':
+            project_contributions[project_id]['completed_tasks'] += 1
+        if task.is_overdue:
+            project_contributions[project_id]['overdue_tasks'] += 1
+    
+    # Timeline katkısını hesapla
+    timeline_contribution = []
+    for project_data in project_contributions.values():
+        # Bu proje için timeline var mı?
+        try:
+            project = Project.objects(id=ObjectId(project_data['project_id'])).first()
+            timeline = ProjectTimeline.objects(project=project).first()
+            
+            if timeline:
+                project_data['timeline'] = {
+                    'mvp_deadline': timeline.mvp_deadline.strftime('%Y-%m-%d'),
+                    'full_project_deadline': timeline.full_project_deadline.strftime('%Y-%m-%d'),
+                    'risk_level': timeline.risk_level
+                }
+            else:
+                project_data['timeline'] = None
+                
+        except Exception:
+            project_data['timeline'] = None
+        
+        timeline_contribution.append(project_data)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'timeline_contribution': timeline_contribution,
+        'total_projects': len(timeline_contribution)
     })

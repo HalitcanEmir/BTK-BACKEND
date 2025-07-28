@@ -702,3 +702,139 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 ```
 
 --- 
+
+### Proje Timeline Analizi
+
+**Endpoint:** `POST /projects/{project_id}/generate-timeline`
+
+**Açıklama:** Gemini AI ile proje timeline analizi yapar.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje timeline analizi tamamlandı. MVP: 2025-08-05",
+  "timeline": {
+    "mvp_deadline": "2025-08-05",
+    "full_project_deadline": "2025-08-14",
+    "milestone_list": [
+      {
+        "date": "2025-07-30",
+        "description": "Backend API sistemi tamamlandı",
+        "type": "development"
+      },
+      {
+        "date": "2025-08-05",
+        "description": "MVP hazır - temel özellikler çalışıyor",
+        "type": "mvp"
+      },
+      {
+        "date": "2025-08-14",
+        "description": "Tüm proje tamamlandı",
+        "type": "launch"
+      }
+    ],
+    "riskli_gorevler": [
+      {
+        "title": "Kullanıcı arayüzü geliştirme",
+        "reason": "Frontend geliştiricinin günlük çalışma süresi yetersiz olabilir",
+        "risk_level": "medium"
+      }
+    ]
+  },
+  "total_tasks": 6,
+  "timeline_id": "688747b1b837ea193f8604e0"
+}
+```
+
+### Proje Timeline Görüntüleme
+
+**Endpoint:** `GET /projects/{project_id}/timeline`
+
+**Açıklama:** Proje timeline'ını getirir.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "project_title": "E-Ticaret Platformu",
+  "timeline": {
+    "id": "688747b1b837ea193f8604e0",
+    "mvp_deadline": "2025-08-05",
+    "full_project_deadline": "2025-08-14",
+    "created_at": "2025-07-28",
+    "risk_level": "medium",
+    "total_tasks": 6,
+    "completed_tasks": 2,
+    "pending_tasks": 4
+  },
+  "milestones": [
+    {
+      "id": "688747b1b837ea193f8604e1",
+      "date": "2025-07-30",
+      "description": "Backend API sistemi tamamlandı",
+      "type": "development",
+      "status": "pending",
+      "completed_at": null
+    }
+  ],
+  "risks": [
+    {
+      "id": "688747b1b837ea193f8604e2",
+      "task_title": "Kullanıcı arayüzü geliştirme",
+      "reason": "Frontend geliştiricinin günlük çalışma süresi yetersiz olabilir",
+      "risk_level": "medium",
+      "mitigation_strategy": null
+    }
+  ],
+  "task_stats": {
+    "total_tasks": 6,
+    "completed_tasks": 2,
+    "in_progress_tasks": 3,
+    "overdue_tasks": 1,
+    "avg_progress": 45.5
+  }
+}
+```
+
+### Kullanıcı Timeline Katkısı
+
+**Endpoint:** `GET /projects/timeline/contribution`
+
+**Açıklama:** Kullanıcının timeline katkısını getirir.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "timeline_contribution": [
+    {
+      "project_title": "E-Ticaret Platformu",
+      "project_id": "68873f71b8d65f255b958a3f",
+      "tasks": [
+        {
+          "id": "688747b1b837ea193f8604d0",
+          "title": "Backend Altyapısı Kurulumu",
+          "start_date": "2025-07-28",
+          "end_date": "2025-08-03",
+          "duration_days": 7,
+          "status": "in-progress",
+          "progress_percentage": 75,
+          "is_overdue": false
+        }
+      ],
+      "total_duration": 7,
+      "completed_tasks": 0,
+      "overdue_tasks": 0,
+      "timeline": {
+        "mvp_deadline": "2025-08-05",
+        "full_project_deadline": "2025-08-14",
+        "risk_level": "medium"
+      }
+    }
+  ],
+  "total_projects": 1
+}
+```
+
+--- 
