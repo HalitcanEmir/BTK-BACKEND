@@ -44,3 +44,12 @@ class User(Document):
     # Programlama dilleri ve seviyeleri
     known_languages = ListField(StringField())  # Bilinen diller listesi
     language_levels = StringField()  # Dillerin seviyeleri JSON string
+    
+    # Performans skoru alanları
+    reliability_score = IntField(default=100)  # Güven skoru (0-1000)
+    total_tasks = IntField(default=0)  # Toplam görev sayısı
+    completed_tasks = IntField(default=0)  # Tamamlanan görev sayısı
+    overdue_tasks = IntField(default=0)  # Geciken görev sayısı
+    on_time_tasks = IntField(default=0)  # Zamanında tamamlanan görev sayısı
+    average_completion_time = FloatField(default=0.0)  # Ortalama tamamlanma süresi (gün)
+    last_performance_update = DateTimeField()  # Son performans güncelleme tarihi

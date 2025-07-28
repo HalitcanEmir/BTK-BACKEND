@@ -13,7 +13,9 @@ from .views import (
     generate_project_tasks_with_gemini, get_user_tasks, get_project_tasks,
     update_task_status, add_task_log, get_task_notifications,
     mark_notification_as_read, calculate_user_performance_score,
-    get_team_performance_leaderboard
+    get_team_performance_leaderboard, update_task_progress,
+    get_user_task_dashboard, get_task_notifications_advanced,
+    get_user_performance_analytics, debug_users_list
 )
 
 urlpatterns = [
@@ -52,8 +54,13 @@ urlpatterns = [
     path('<str:id>/tasks', get_project_tasks),
     path('tasks/<str:task_id>/status', update_task_status),
     path('tasks/<str:task_id>/log', add_task_log),
+    path('tasks/<str:task_id>/progress', update_task_progress),
+    # Görev dashboard ve analitik
+    path('tasks/dashboard', get_user_task_dashboard),
+    path('tasks/analytics', get_user_performance_analytics),
     # Bildirim endpoint'leri
     path('notifications/tasks', get_task_notifications),
+    path('notifications/tasks/advanced', get_task_notifications_advanced),
     path('notifications/<str:notification_id>/read', mark_notification_as_read),
     # Performans endpoint'leri
     path('performance/score', calculate_user_performance_score),
@@ -74,4 +81,6 @@ urlpatterns = [
     path('<str:id>/ai', project_ai_panel),
     # En genel URL'yi en sona koy
     path('<str:id>', project_detail),
+    # Debug endpoint'leri
+    path('debug/users', debug_users_list),
 ] 

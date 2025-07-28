@@ -42,11 +42,23 @@ class ProjectTask(Document):
     completed_at = DateTimeField()
     completion_notes = StringField()
     
+    # Yeni alanlar - görev takibi için
+    is_overdue = BooleanField(default=False)
+    delay_days = IntField(default=0)
+    on_time = BooleanField(default=True)
+    progress_percentage = IntField(default=0, min_value=0, max_value=100)
+    estimated_hours = IntField()  # Tahmini çalışma saati
+    actual_hours = IntField(default=0)  # Gerçek çalışma saati
+    user_notes = StringField()  # Kullanıcının notları
+    admin_notes = StringField()  # Admin notları
+    
     meta = {
         'indexes': [
             {'fields': ['project', 'assigned_user']},
             {'fields': ['assigned_user', 'status']},
-            {'fields': ['end_date', 'status']}
+            {'fields': ['end_date', 'status']},
+            {'fields': ['is_overdue', 'status']},
+            {'fields': ['assigned_user', 'is_overdue']}
         ]
     }
 

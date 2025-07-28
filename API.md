@@ -541,3 +541,164 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 ```
 
 --- 
+
+### Görev İlerleme Güncelleme
+
+**Endpoint:** `POST /projects/tasks/{task_id}/progress`
+
+**Açıklama:** Kullanıcının görev ilerleme durumunu günceller.
+
+**Body:**
+```json
+{
+  "progress_percentage": 75,
+  "user_notes": "API entegrasyonu tamamlandı, test aşamasındayım",
+  "actual_hours": 12
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Görev ilerlemesi %50 -> %75 olarak güncellendi",
+  "task_id": "665f1c2e8b3e2a1a2b3c4d5e",
+  "progress_percentage": 75
+}
+```
+
+### Kullanıcı Görev Dashboard'u
+
+**Endpoint:** `GET /projects/tasks/dashboard`
+
+**Açıklama:** Kullanıcının görev istatistiklerini ve yaklaşan görevlerini getirir.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "statistics": {
+    "total_tasks": 10,
+    "completed_tasks": 6,
+    "in_progress_tasks": 2,
+    "overdue_tasks": 1,
+    "upcoming_tasks": 1
+  },
+  "upcoming_deadlines": [
+    {
+      "task_id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "title": "API Entegrasyonu",
+      "days_until_deadline": 2,
+      "is_overdue": false
+    }
+  ],
+  "performance": {
+    "reliability_score": 750,
+    "total_tasks": 10,
+    "completed_tasks": 6,
+    "overdue_tasks": 1,
+    "on_time_tasks": 5,
+    "completion_rate": 60.0,
+    "on_time_rate": 83.33
+  }
+}
+```
+
+### Gelişmiş Görev Bildirimleri
+
+**Endpoint:** `GET /projects/notifications/tasks/advanced`
+
+**Açıklama:** Detaylı görev bildirimlerini getirir (başlama, gecikme, yaklaşan, düşük ilerleme).
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "notifications": [
+    {
+      "type": "task_started",
+      "title": "Görev Başladı",
+      "message": "\"API Entegrasyonu\" görevin başladı",
+      "task_id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "project_title": "E-Ticaret Platformu",
+      "priority": "high",
+      "days_remaining": 3
+    },
+    {
+      "type": "overdue",
+      "title": "Süresi Geçen Görev",
+      "message": "\"Frontend Tasarımı\" görevinin süresi 2 gün geçti",
+      "task_id": "665f1c2e8b3e2a1a2b3c4d5f",
+      "project_title": "E-Ticaret Platformu",
+      "days_overdue": 2,
+      "priority": "urgent"
+    },
+    {
+      "type": "low_progress",
+      "title": "Düşük İlerleme",
+      "message": "\"Test Senaryoları\" görevinde ilerleme düşük (%20)",
+      "task_id": "665f1c2e8b3e2a1a2b3c4d60",
+      "project_title": "E-Ticaret Platformu",
+      "progress_percentage": 20,
+      "days_remaining": 1
+    }
+  ],
+  "total_count": 3,
+  "urgent_count": 1,
+  "upcoming_count": 1
+}
+```
+
+### Kullanıcı Performans Analizi
+
+**Endpoint:** `GET /projects/tasks/analytics`
+
+**Açıklama:** Kullanıcının detaylı performans analizini getirir.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "current_month": {
+    "total_tasks": 5,
+    "completed_tasks": 3,
+    "overdue_tasks": 1,
+    "completion_rate": 60.0
+  },
+  "task_categories": {
+    "Backend": {
+      "total": 4,
+      "completed": 2,
+      "overdue": 1,
+      "avg_completion_time": 3.5
+    },
+    "Frontend": {
+      "total": 3,
+      "completed": 2,
+      "overdue": 0,
+      "avg_completion_time": 2.0
+    }
+  },
+  "monthly_performance": [
+    {
+      "month": "2025-07",
+      "total_tasks": 5,
+      "completed_tasks": 3,
+      "overdue_tasks": 1,
+      "completion_rate": 60.0
+    }
+  ],
+  "overall_stats": {
+    "reliability_score": 750,
+    "total_tasks": 10,
+    "completed_tasks": 6,
+    "overdue_tasks": 1,
+    "on_time_tasks": 5,
+    "average_completion_time": 3.2,
+    "completion_rate": 60.0,
+    "on_time_rate": 83.33
+  }
+}
+```
+
+--- 
