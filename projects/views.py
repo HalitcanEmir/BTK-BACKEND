@@ -862,6 +862,20 @@ def project_join_request(request, id):
     try:
         data = json.loads(request.body)
         message = data.get("message", "")
+        daily_available_hours = data.get("daily_available_hours")
+        
+        # Günlük çalışma saati validasyonu
+        if daily_available_hours is None:
+            return JsonResponse({"status": "error", "message": "Günlük çalışma saati belirtmelisiniz"}, status=400)
+        
+        try:
+            daily_available_hours = int(daily_available_hours)
+        except (ValueError, TypeError):
+            return JsonResponse({"status": "error", "message": "Günlük çalışma saati sayı olmalıdır"}, status=400)
+        
+        if daily_available_hours < 1 or daily_available_hours > 12:
+            return JsonResponse({"status": "error", "message": "Günlük çalışma saati 1-12 saat arasında olmalıdır"}, status=400)
+            
     except Exception:
         return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
 
@@ -883,14 +897,24 @@ def project_join_request(request, id):
     # Zaten başvuru yapmış mı?
     existing_request = JoinRequest.objects(idea=None, project=project, user=user).first()
     if existing_request:
-        return JsonResponse({"status": "error", "message": "Bu projeye zaten başvurdunuz"}, status=400)
+        # Mevcut başvuruyu güncelle
+        existing_request.message = message
+        existing_request.daily_available_hours = daily_available_hours
+        existing_request.save()
+        
+        return JsonResponse({
+            "status": "ok", 
+            "message": "Proje başvurunuz güncellendi",
+            "request_id": str(existing_request.id)
+        })
 
     # Yeni başvuru oluştur
     join_request = JoinRequest(
         idea=None,  # Fikir değil, proje başvurusu
         project=project,
         user=user,
-        message=message
+        message=message,
+        daily_available_hours=daily_available_hours
     )
     join_request.save()
     
@@ -929,7 +953,8 @@ def project_join_request_status(request, id):
         return JsonResponse({
             "has_applied": True, 
             "status": join_request.status,
-            "message": join_request.message
+            "message": join_request.message,
+            "daily_available_hours": join_request.daily_available_hours
         })
     else:
         return JsonResponse({"has_applied": False})
@@ -958,6 +983,7 @@ def admin_list_project_join_requests(request):
                 'user_id': str(jr.user.id),
                 'user_name': jr.user.full_name,
                 'message': jr.message,
+                'daily_available_hours': jr.daily_available_hours,
                 'status': jr.status,
                 'created_at': str(jr.created_at)
             })
@@ -1095,3 +1121,84 @@ def project_chat(request, id):
     
     else:
         return JsonResponse({"status": "error", "message": "Yöntem desteklenmiyor"}, status=405)
+
+@csrf_exempt
+def get_project_team_planning_data(request, id):
+    """Proje ekibi planlaması için Gemini'ye gönderilecek veriyi hazırlar"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Onaylanmış başvuruları al
+    approved_requests = JoinRequest.objects(
+        project=project,
+        status='approved'
+    )
+    
+    team_data = []
+    for req in approved_requests:
+        team_data.append({
+            'user_id': str(req.user.id),
+            'user_name': req.user.full_name,
+            'daily_available_hours': req.daily_available_hours,
+            'message': req.message
+        })
+    
+    # Proje bilgileri
+    project_data = {
+        'project_id': str(project.id),
+        'project_title': project.title,
+        'project_description': project.description,
+        'team_members': team_data,
+        'total_team_size': len(team_data),
+        'total_daily_hours': sum(member['daily_available_hours'] for member in team_data)
+    }
+    
+    return JsonResponse({
+        'status': 'ok',
+        'project_data': project_data,
+        'message': 'Proje ekibi planlaması için veri hazırlandı'
+    })
+
+@csrf_exempt
+def project_join_request_cancel(request, id):
+    """Kullanıcının proje başvurusunu iptal eder"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Başvuru var mı?
+    existing_request = JoinRequest.objects(idea=None, project=project, user=user).first()
+    if not existing_request:
+        return JsonResponse({"status": "error", "message": "Bu projeye başvurunuz bulunamadı"}, status=404)
+    
+    # Başvuru zaten onaylanmış mı?
+    if existing_request.status == 'approved':
+        return JsonResponse({"status": "error", "message": "Onaylanmış başvuru iptal edilemez"}, status=400)
+    
+    # Başvuruyu sil
+    existing_request.delete()
+    
+    return JsonResponse({
+        "status": "ok", 
+        "message": "Proje başvurunuz iptal edildi"
+    })

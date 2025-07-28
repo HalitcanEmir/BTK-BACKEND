@@ -1,5 +1,172 @@
 # BTK Backend API Dökümantasyonu
 
+## Proje Başvuru Sistemi
+
+### Projeye Başvuru Yapma
+
+**Endpoint:** `POST /projects/{id}/join-request`
+
+**Açıklama:** Bir projeye katılım başvurusu gönderir. Eğer kullanıcı daha önce başvuru yapmışsa, mevcut başvuru güncellenir.
+
+**Gerekli Alanlar:**
+- `daily_available_hours` (int, zorunlu): Günlük çalışma saati (1-12 arası)
+- `message` (string, isteğe bağlı): Başvuru mesajı
+
+**Örnek İstek:**
+```json
+{
+  "daily_available_hours": 4,
+  "message": "Bu projede frontend geliştirme yapmak istiyorum."
+}
+```
+
+**Başarılı Response (Yeni Başvuru):**
+```json
+{
+  "status": "ok",
+  "message": "Proje başvurunuz alındı",
+  "request_id": "665f1c2e8b3e2a1a2b3c4d5e"
+}
+```
+
+**Başarılı Response (Güncelleme):**
+```json
+{
+  "status": "ok",
+  "message": "Proje başvurunuz güncellendi",
+  "request_id": "665f1c2e8b3e2a1a2b3c4d5e"
+}
+```
+
+### Başvuru İptal Etme
+
+**Endpoint:** `POST /projects/{id}/join-request/cancel`
+
+**Açıklama:** Kullanıcının proje başvurusunu iptal eder.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje başvurunuz iptal edildi"
+}
+```
+
+**Hatalı Response (Onaylanmış başvuru):**
+```json
+{
+  "status": "error",
+  "message": "Onaylanmış başvuru iptal edilemez"
+}
+```
+
+### Başvuru Durumu Kontrolü
+
+**Endpoint:** `GET /projects/{id}/join-request/status`
+
+**Açıklama:** Kullanıcının proje başvuru durumunu kontrol eder.
+
+**Başarılı Response:**
+```json
+{
+  "has_applied": true,
+  "status": "pending",
+  "message": "Bu projede frontend geliştirme yapmak istiyorum.",
+  "daily_available_hours": 4
+}
+```
+
+### Admin - Proje Başvurularını Listeleme
+
+**Endpoint:** `GET /projects/admin/join-requests`
+
+**Açıklama:** Admin için tüm proje başvurularını listeler.
+
+**Query Parametreleri:**
+- `status` (string, isteğe bağlı): Filtreleme için (pending, approved, rejected)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "join_requests": [
+    {
+      "id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "project_id": "665f1c2e8b3e2a1a2b3c4d5f",
+      "project_title": "E-Ticaret Platformu",
+      "user_id": "665f1c2e8b3e2a1a2b3c4d60",
+      "user_name": "Ahmet Yılmaz",
+      "message": "Frontend geliştirme yapmak istiyorum",
+      "daily_available_hours": 4,
+      "status": "pending",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+### Admin - Başvuru Onaylama
+
+**Endpoint:** `POST /projects/admin/join-requests/{request_id}/approve`
+
+**Açıklama:** Admin proje başvurusunu onaylar ve kullanıcıyı ekibe ekler.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje başvurusu onaylandı ve kullanıcı ekibe eklendi",
+  "user_name": "Ahmet Yılmaz",
+  "project_title": "E-Ticaret Platformu"
+}
+```
+
+### Admin - Başvuru Reddetme
+
+**Endpoint:** `POST /projects/admin/join-requests/{request_id}/reject`
+
+**Açıklama:** Admin proje başvurusunu reddeder.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje başvurusu reddedildi"
+}
+```
+
+### Proje Ekibi Planlaması Verisi
+
+**Endpoint:** `GET /projects/{id}/team-planning-data`
+
+**Açıklama:** Gemini AI için proje ekibi planlaması verisini hazırlar.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "project_data": {
+    "project_id": "665f1c2e8b3e2a1a2b3c4d5f",
+    "project_title": "E-Ticaret Platformu",
+    "project_description": "Modern e-ticaret platformu",
+    "team_members": [
+      {
+        "user_id": "665f1c2e8b3e2a1a2b3c4d60",
+        "user_name": "Ahmet Yılmaz",
+        "daily_available_hours": 4,
+        "message": "Frontend geliştirme yapmak istiyorum"
+      }
+    ],
+    "total_team_size": 1,
+    "total_daily_hours": 4
+  },
+  "message": "Proje ekibi planlaması için veri hazırlandı"
+}
+```
+
+---
+
 ## Kişi Ekleme
 
 **Endpoint:** `/add/`

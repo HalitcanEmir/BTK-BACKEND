@@ -7,8 +7,9 @@ from .views import (
     approve_completion_request, reject_completion_request, submit_investment_offer,
     approve_investment_offer, reject_investment_offer, leaderboard, toggle_project_like,
     analyze_project_ai, get_project_investment_advice, get_user_project_suggestions,
-    project_join_request, project_join_request_status, admin_list_project_join_requests,
-    admin_approve_project_join_request, admin_reject_project_join_request
+    project_join_request, project_join_request_status, project_join_request_cancel,
+    admin_list_project_join_requests, admin_approve_project_join_request,
+    admin_reject_project_join_request, get_project_team_planning_data
 )
 
 urlpatterns = [
@@ -37,6 +38,9 @@ urlpatterns = [
     # Proje başvuru endpoint'leri
     path('<str:id>/join-request', project_join_request),
     path('<str:id>/join-request/status', project_join_request_status),
+    path('<str:id>/join-request/cancel', project_join_request_cancel),
+    # Proje ekibi planlaması endpoint'i
+    path('<str:id>/team-planning-data', get_project_team_planning_data),
     # Admin proje başvuru endpoint'leri
     path('admin/join-requests', admin_list_project_join_requests),
     path('admin/join-requests/<str:request_id>/approve', admin_approve_project_join_request),

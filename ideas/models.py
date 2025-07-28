@@ -44,6 +44,7 @@ class JoinRequest(Document):
     project = ReferenceField('Project', required=False)  # Proje başvurusu için
     user = ReferenceField(User, required=True)
     message = StringField()
+    daily_available_hours = IntField(min_value=1, max_value=12)  # Günlük çalışma saati (1-12 arası)
     status = StringField(default='pending')  # pending, approved, rejected
     created_at = DateTimeField(default=datetime.datetime.utcnow)
     approved_by = ReferenceField(User)
