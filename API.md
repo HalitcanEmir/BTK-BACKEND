@@ -297,3 +297,247 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 ---
 
 **Tüm bu adımları kontrol et, hala sorun yaşarsan bağlantı URI'nı (şifreyi gizleyerek) ve settings.py'deki ilgili kısmı paylaşabilirsin. Daha detaylı yardımcı olabilirim!** 
+
+---
+
+## Görev Planlama Sistemi
+
+### Gemini AI ile Görev Oluşturma
+
+**Endpoint:** `POST /projects/{id}/generate-tasks`
+
+**Açıklama:** Gemini AI kullanarak proje için otomatik görev planlaması yapar.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "2 görev başarıyla oluşturuldu",
+  "tasks": [
+    {
+      "title": "Kullanıcı kayıt/giriş sistemi",
+      "assigned_to": "Halitcan",
+      "duration_days": 3,
+      "start_date": "2025-07-28",
+      "end_date": "2025-07-31",
+      "description": "Kullanıcı kayıt ve giriş sistemi geliştirme",
+      "priority": "high"
+    }
+  ],
+  "total_tasks": 2
+}
+```
+
+### Kullanıcı Görevlerini Listeleme
+
+**Endpoint:** `GET /projects/tasks/my`
+
+**Query Parametreleri:**
+- `status` (string, isteğe bağlı): Filtreleme için (to-do, in-progress, done)
+- `priority` (string, isteğe bağlı): Filtreleme için (low, medium, high, urgent)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "tasks": [
+    {
+      "id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "title": "Kullanıcı kayıt/giriş sistemi",
+      "description": "Kullanıcı kayıt ve giriş sistemi geliştirme",
+      "project_id": "665f1c2e8b3e2a1a2b3c4d5f",
+      "project_title": "E-Ticaret Platformu",
+      "status": "in-progress",
+      "priority": "high",
+      "start_date": "2025-07-28T00:00:00Z",
+      "end_date": "2025-07-31T00:00:00Z",
+      "duration_days": 3,
+      "assigned_by": "Admin User",
+      "created_at": "2025-07-28T10:30:00Z",
+      "completed_at": null,
+      "completion_notes": null,
+      "recent_logs": [
+        {
+          "action": "started",
+          "notes": "Göreve başladım",
+          "created_at": "2025-07-28T10:30:00Z"
+        }
+      ],
+      "is_overdue": false
+    }
+  ],
+  "total_count": 1
+}
+```
+
+### Proje Görevlerini Listeleme (Admin)
+
+**Endpoint:** `GET /projects/{id}/tasks`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "tasks": [
+    {
+      "id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "title": "Kullanıcı kayıt/giriş sistemi",
+      "description": "Kullanıcı kayıt ve giriş sistemi geliştirme",
+      "assigned_user_id": "665f1c2e8b3e2a1a2b3c4d60",
+      "assigned_user_name": "Halitcan",
+      "status": "in-progress",
+      "priority": "high",
+      "start_date": "2025-07-28T00:00:00Z",
+      "end_date": "2025-07-31T00:00:00Z",
+      "duration_days": 3,
+      "assigned_by": "Admin User",
+      "created_at": "2025-07-28T10:30:00Z",
+      "completed_at": null,
+      "completion_notes": null,
+      "is_overdue": false
+    }
+  ],
+  "statistics": {
+    "total_tasks": 5,
+    "completed_tasks": 2,
+    "pending_tasks": 3,
+    "overdue_tasks": 1,
+    "completion_rate": 40.0
+  }
+}
+```
+
+### Görev Durumu Güncelleme
+
+**Endpoint:** `POST /projects/tasks/{task_id}/status`
+
+**Body:**
+```json
+{
+  "status": "done",
+  "notes": "Görev başarıyla tamamlandı"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Görev durumu 'in-progress' -> 'done' olarak güncellendi",
+  "task_id": "665f1c2e8b3e2a1a2b3c4d5e",
+  "new_status": "done"
+}
+```
+
+### Görev Log Ekleme
+
+**Endpoint:** `POST /projects/tasks/{task_id}/log`
+
+**Body:**
+```json
+{
+  "action": "started",
+  "notes": "Göreve başladım"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Log başarıyla eklendi",
+  "log_id": "665f1c2e8b3e2a1a2b3c4d5f"
+}
+```
+
+### Görev Bildirimleri
+
+**Endpoint:** `GET /projects/notifications/tasks`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "notifications": [
+    {
+      "type": "overdue",
+      "title": "Süresi Geçen Görev",
+      "message": "\"Kullanıcı kayıt/giriş sistemi\" görevinin süresi geçti",
+      "task_id": "665f1c2e8b3e2a1a2b3c4d5e",
+      "project_title": "E-Ticaret Platformu",
+      "days_overdue": 2
+    },
+    {
+      "type": "upcoming",
+      "title": "Yaklaşan Görev",
+      "message": "\"Proje kart tasarımı\" görevinin bitiş tarihi yaklaşıyor",
+      "task_id": "665f1c2e8b3e2a1a2b3c4d5f",
+      "project_title": "E-Ticaret Platformu",
+      "days_until_deadline": 1
+    }
+  ],
+  "total_count": 2
+}
+```
+
+### Performans Skoru
+
+**Endpoint:** `GET /projects/performance/score`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "user_id": "665f1c2e8b3e2a1a2b3c4d60",
+  "user_name": "Halitcan",
+  "performance_score": 750,
+  "performance_level": "İyi",
+  "statistics": {
+    "total_tasks": 10,
+    "completed_tasks": 8,
+    "overdue_tasks": 1,
+    "on_time_tasks": 7,
+    "completion_rate": 80.0,
+    "on_time_rate": 87.5
+  },
+  "score_breakdown": {
+    "base_score": 100,
+    "completion_bonus": 80,
+    "on_time_bonus": 35,
+    "overdue_penalty": 15,
+    "total_score": 750
+  }
+}
+```
+
+### Performans Sıralaması
+
+**Endpoint:** `GET /projects/performance/leaderboard`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "leaderboard": [
+    {
+      "user_id": "665f1c2e8b3e2a1a2b3c4d60",
+      "user_name": "Halitcan",
+      "performance_score": 750,
+      "total_tasks": 10,
+      "completed_tasks": 8,
+      "completion_rate": 80.0
+    },
+    {
+      "user_id": "665f1c2e8b3e2a1a2b3c4d61",
+      "user_name": "Ayşe",
+      "performance_score": 650,
+      "total_tasks": 8,
+      "completed_tasks": 6,
+      "completion_rate": 75.0
+    }
+  ],
+  "total_participants": 2
+}
+```
+
+--- 

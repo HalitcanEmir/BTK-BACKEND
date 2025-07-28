@@ -9,7 +9,11 @@ from .views import (
     analyze_project_ai, get_project_investment_advice, get_user_project_suggestions,
     project_join_request, project_join_request_status, project_join_request_cancel,
     admin_list_project_join_requests, admin_approve_project_join_request,
-    admin_reject_project_join_request, get_project_team_planning_data
+    admin_reject_project_join_request, get_project_team_planning_data,
+    generate_project_tasks_with_gemini, get_user_tasks, get_project_tasks,
+    update_task_status, add_task_log, get_task_notifications,
+    mark_notification_as_read, calculate_user_performance_score,
+    get_team_performance_leaderboard
 )
 
 urlpatterns = [
@@ -41,6 +45,20 @@ urlpatterns = [
     path('<str:id>/join-request/cancel', project_join_request_cancel),
     # Proje ekibi planlaması endpoint'i
     path('<str:id>/team-planning-data', get_project_team_planning_data),
+    # Gemini AI görev planlaması
+    path('<str:id>/generate-tasks', generate_project_tasks_with_gemini),
+    # Görev yönetimi endpoint'leri
+    path('tasks/my', get_user_tasks),
+    path('<str:id>/tasks', get_project_tasks),
+    path('tasks/<str:task_id>/status', update_task_status),
+    path('tasks/<str:task_id>/log', add_task_log),
+    # Bildirim endpoint'leri
+    path('notifications/tasks', get_task_notifications),
+    path('notifications/<str:notification_id>/read', mark_notification_as_read),
+    # Performans endpoint'leri
+    path('performance/score', calculate_user_performance_score),
+    path('performance/score/<str:user_id>', calculate_user_performance_score),
+    path('performance/leaderboard', get_team_performance_leaderboard),
     # Admin proje başvuru endpoint'leri
     path('admin/join-requests', admin_list_project_join_requests),
     path('admin/join-requests/<str:request_id>/approve', admin_approve_project_join_request),

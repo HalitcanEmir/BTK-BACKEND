@@ -1,5 +1,6 @@
 from django.db import models
 from mongoengine import Document, BooleanField, DateTimeField, StringField, ListField, ReferenceField, EmbeddedDocumentField, EmbeddedDocument, IntField, FloatField
+import datetime
 
 # Create your models here.
 
@@ -23,6 +24,46 @@ class InvestmentOffer(EmbeddedDocument):
 class ProjectLike(EmbeddedDocument):
     user = ReferenceField('User', required=True)
     liked_at = DateTimeField(required=True)
+
+class ProjectTask(Document):
+    """Proje görevleri"""
+    project = ReferenceField('Project', required=True)
+    title = StringField(required=True)
+    description = StringField()
+    assigned_user = ReferenceField('User', required=True)
+    assigned_by = ReferenceField('User', required=True)  # Görevi atayan admin
+    start_date = DateTimeField(required=True)
+    end_date = DateTimeField(required=True)
+    duration_days = IntField(required=True)
+    status = StringField(default='to-do', choices=['to-do', 'in-progress', 'done', 'cancelled'])
+    priority = StringField(default='medium', choices=['low', 'medium', 'high', 'urgent'])
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.datetime.utcnow)
+    completed_at = DateTimeField()
+    completion_notes = StringField()
+    
+    meta = {
+        'indexes': [
+            {'fields': ['project', 'assigned_user']},
+            {'fields': ['assigned_user', 'status']},
+            {'fields': ['end_date', 'status']}
+        ]
+    }
+
+class TaskLog(Document):
+    """Görev logları - başlama, bitirme, gecikme vs."""
+    task = ReferenceField(ProjectTask, required=True)
+    user = ReferenceField('User', required=True)
+    action = StringField(required=True, choices=['started', 'completed', 'paused', 'resumed', 'delayed', 'updated'])
+    notes = StringField()
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    
+    meta = {
+        'indexes': [
+            {'fields': ['task', 'created_at']},
+            {'fields': ['user', 'created_at']}
+        ]
+    }
 
 class Project(Document):
     title = StringField(required=True)

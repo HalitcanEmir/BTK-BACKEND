@@ -11,6 +11,16 @@ from .models import InvestmentOffer
 from .models import ProjectLike
 from .utils import analyze_project, generate_project_suggestions, get_investment_advice
 from ideas.models import JoinRequest
+import requests
+import json
+from datetime import datetime, timedelta
+from bson import ObjectId
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from mongoengine import DoesNotExist
+from users.models import User
+from ideas.models import JoinRequest
+from .models import Project, ProjectTask, TaskLog
 
 # Create your views here.
 
@@ -1201,4 +1211,647 @@ def project_join_request_cancel(request, id):
     return JsonResponse({
         "status": "ok", 
         "message": "Proje başvurunuz iptal edildi"
+    })
+
+@csrf_exempt
+def generate_project_tasks_with_gemini(request, id):
+    """Gemini AI ile proje görevlerini oluşturur"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    if not is_admin(user):
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Onaylanmış başvuruları al
+    approved_requests = JoinRequest.objects(
+        project=project,
+        status='approved'
+    )
+    
+    if not approved_requests:
+        return JsonResponse({"status": "error", "message": "Bu proje için onaylanmış başvuru bulunamadı"}, status=400)
+    
+    # Ekip üyeleri verilerini hazırla
+    team_members = []
+    for req in approved_requests:
+        # Kullanıcının yeteneklerini al (CV analizi sonucu veya kayıt sırasında)
+        user_skills = getattr(req.user, 'known_technologies', []) or []
+        
+        # Rol tercihini belirle (başvuru mesajından çıkar)
+        role = determine_role_from_message(req.message)
+        
+        team_members.append({
+            "name": req.user.full_name,
+            "role": role,
+            "available_hours": req.daily_available_hours,
+            "skills": user_skills
+        })
+    
+    # Gemini'ye gönderilecek prompt verisi
+    gemini_data = {
+        "project_name": project.title,
+        "project_description": project.description,
+        "team_members": team_members,
+        "project_needs": project.description
+    }
+    
+    # Gemini AI'ya gönder
+    try:
+        gemini_response = send_to_gemini_for_task_planning(gemini_data)
+        
+        if gemini_response.get('status') == 'success':
+            # Görevleri veritabanına kaydet
+            tasks_created = save_tasks_to_database(project, gemini_response['tasks'], user)
+            
+            return JsonResponse({
+                "status": "ok",
+                "message": f"{tasks_created} görev başarıyla oluşturuldu",
+                "tasks": gemini_response['tasks'],
+                "total_tasks": tasks_created
+            })
+        else:
+            return JsonResponse({
+                "status": "error",
+                "message": "Gemini AI'dan yanıt alınamadı",
+                "error": gemini_response.get('error', 'Bilinmeyen hata')
+            }, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Görev planlaması sırasında hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+def determine_role_from_message(message):
+    """Başvuru mesajından rol tercihini belirler"""
+    message_lower = message.lower() if message else ""
+    
+    if any(word in message_lower for word in ['frontend', 'react', 'vue', 'angular', 'html', 'css', 'javascript']):
+        return "frontend"
+    elif any(word in message_lower for word in ['backend', 'python', 'django', 'nodejs', 'java', 'php', 'api']):
+        return "backend"
+    elif any(word in message_lower for word in ['test', 'qa', 'testing', 'quality']):
+        return "test"
+    else:
+        return "general"  # Genel rol
+
+def send_to_gemini_for_task_planning(data):
+    """Gemini AI'ya görev planlaması için veri gönderir"""
+    import google.generativeai as genai
+    import json
+    import re
+    from django.conf import settings
+    
+    def clean_gemini_json(raw_text):
+        """Gemini'den dönen cevaptaki kod bloğu işaretlerini temizle"""
+        cleaned = re.sub(r"^```json|^```|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+        return cleaned
+    
+    try:
+        # Gemini AI'yı yapılandır (mevcut settings'den al)
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Prompt hazırla
+        prompt = f"""
+        Sen bir proje yöneticisisin. Aşağıdaki proje ve ekip bilgilerine göre detaylı görev planlaması yap.
+
+        PROJE BİLGİLERİ:
+        - Proje Adı: {data['project_name']}
+        - Proje Açıklaması: {data['project_description']}
+        - Proje İhtiyaçları: {data['project_needs']}
+
+        EKİP ÜYELERİ:
+        """
+        
+        for member in data['team_members']:
+            prompt += f"""
+        - {member['name']}:
+          * Rol: {member['role']}
+          * Günlük Çalışma Saati: {member['available_hours']} saat
+          * Yetenekler: {', '.join(member['skills']) if member['skills'] else 'Belirtilmemiş'}
+            """
+        
+        prompt += f"""
+
+        GÖREV:
+        Bu proje için detaylı görev planlaması yap. Her görev için:
+        1. Görev başlığı (açık ve anlaşılır)
+        2. Hangi kişiye atanacağı
+        3. Tahmini süre (gün olarak)
+        4. Başlangıç ve bitiş tarihi
+        5. Görev açıklaması
+        6. Öncelik seviyesi (low, medium, high, urgent)
+
+        KURALLAR:
+        - Görevler mantıklı sırayla olmalı (önce backend, sonra frontend)
+        - Her kişinin günlük çalışma saatine göre süre hesapla
+        - Görevler 1-14 gün arasında olmalı
+        - Tarihler YYYY-MM-DD formatında olmalı
+        - Bugünden başla (bugün: {datetime.now().strftime('%Y-%m-%d')})
+
+        SADECE JSON formatında yanıtla, başka açıklama ekleme:
+
+        {{
+          "tasks": [
+            {{
+              "title": "Görev başlığı",
+              "assigned_to": "Kullanıcı adı",
+              "duration_days": 3,
+              "start_date": "2025-07-28",
+              "end_date": "2025-07-31",
+              "description": "Detaylı görev açıklaması",
+              "priority": "medium"
+            }}
+          ]
+        }}
+        """
+        
+        # Gemini'ye gönder
+        response = model.generate_content(prompt)
+        
+        if not response.text or response.text.strip() == "":
+            return {
+                "status": "error",
+                "error": "Gemini boş cevap döndü"
+            }
+        
+        # Response'u parse et
+        try:
+            cleaned_text = clean_gemini_json(response.text)
+            tasks_data = json.loads(cleaned_text)
+            
+            return {
+                "status": "success",
+                "tasks": tasks_data.get("tasks", [])
+            }
+            
+        except json.JSONDecodeError as e:
+            return {
+                "status": "error",
+                "error": f"Gemini'den gelen yanıt JSON formatında değil: {str(e)}",
+                "raw_response": response.text[:500]
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Gemini API hatası: {str(e)}"
+        }
+
+def save_tasks_to_database(project, tasks, admin_user):
+    """Gemini'den gelen görevleri veritabanına kaydeder"""
+    tasks_created = 0
+    
+    for task_data in tasks:
+        try:
+            # Kullanıcıyı bul
+            assigned_user = User.objects(full_name=task_data['assigned_to']).first()
+            if not assigned_user:
+                continue
+            
+            # Tarihleri parse et
+            start_date = datetime.strptime(task_data['start_date'], '%Y-%m-%d')
+            end_date = datetime.strptime(task_data['end_date'], '%Y-%m-%d')
+            
+            # Görevi oluştur
+            task = ProjectTask(
+                project=project,
+                title=task_data['title'],
+                description=task_data.get('description', ''),
+                assigned_user=assigned_user,
+                assigned_by=admin_user,
+                start_date=start_date,
+                end_date=end_date,
+                duration_days=task_data['duration_days'],
+                priority=task_data.get('priority', 'medium')
+            )
+            task.save()
+            tasks_created += 1
+            
+        except Exception as e:
+            print(f"Görev kaydedilirken hata: {e}")
+            continue
+    
+    return tasks_created
+
+@csrf_exempt
+def get_user_tasks(request):
+    """Kullanıcının görevlerini listeler"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    status_filter = request.GET.get('status', '')
+    priority_filter = request.GET.get('priority', '')
+    
+    # Kullanıcının görevlerini al
+    query = {'assigned_user': user}
+    if status_filter:
+        query['status'] = status_filter
+    if priority_filter:
+        query['priority'] = priority_filter
+    
+    tasks = ProjectTask.objects(**query).order_by('end_date')
+    
+    tasks_data = []
+    for task in tasks:
+        # Görev loglarını al
+        recent_logs = TaskLog.objects(task=task).order_by('-created_at')[:3]
+        logs_data = []
+        for log in recent_logs:
+            logs_data.append({
+                'action': log.action,
+                'notes': log.notes,
+                'created_at': str(log.created_at)
+            })
+        
+        tasks_data.append({
+            'id': str(task.id),
+            'title': task.title,
+            'description': task.description,
+            'project_id': str(task.project.id),
+            'project_title': task.project.title,
+            'status': task.status,
+            'priority': task.priority,
+            'start_date': str(task.start_date),
+            'end_date': str(task.end_date),
+            'duration_days': task.duration_days,
+            'assigned_by': task.assigned_by.full_name,
+            'created_at': str(task.created_at),
+            'completed_at': str(task.completed_at) if task.completed_at else None,
+            'completion_notes': task.completion_notes,
+            'recent_logs': logs_data,
+            'is_overdue': task.end_date < datetime.utcnow() and task.status != 'done'
+        })
+    
+    return JsonResponse({
+        'status': 'ok',
+        'tasks': tasks_data,
+        'total_count': len(tasks_data)
+    })
+
+@csrf_exempt
+def get_project_tasks(request, id):
+    """Projenin tüm görevlerini listeler (admin için)"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        project = Project.objects(id=ObjectId(id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz proje ID"}, status=400)
+    
+    if not project:
+        return JsonResponse({"status": "error", "message": "Proje bulunamadı"}, status=404)
+    
+    # Admin kontrolü veya proje sahibi kontrolü
+    if not is_admin(user) and project.project_owner != user:
+        return JsonResponse({'status': 'error', 'message': 'Yetkisiz erişim'}, status=403)
+    
+    tasks = ProjectTask.objects(project=project).order_by('end_date')
+    
+    tasks_data = []
+    for task in tasks:
+        tasks_data.append({
+            'id': str(task.id),
+            'title': task.title,
+            'description': task.description,
+            'assigned_user_id': str(task.assigned_user.id),
+            'assigned_user_name': task.assigned_user.full_name,
+            'status': task.status,
+            'priority': task.priority,
+            'start_date': str(task.start_date),
+            'end_date': str(task.end_date),
+            'duration_days': task.duration_days,
+            'assigned_by': task.assigned_by.full_name,
+            'created_at': str(task.created_at),
+            'completed_at': str(task.completed_at) if task.completed_at else None,
+            'completion_notes': task.completion_notes,
+            'is_overdue': task.end_date < datetime.utcnow() and task.status != 'done'
+        })
+    
+    # İstatistikler
+    total_tasks = len(tasks_data)
+    completed_tasks = len([t for t in tasks_data if t['status'] == 'done'])
+    overdue_tasks = len([t for t in tasks_data if t['is_overdue']])
+    
+    return JsonResponse({
+        'status': 'ok',
+        'tasks': tasks_data,
+        'statistics': {
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'pending_tasks': total_tasks - completed_tasks,
+            'overdue_tasks': overdue_tasks,
+            'completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
+        }
+    })
+
+@csrf_exempt
+def update_task_status(request, task_id):
+    """Görev durumunu günceller"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        new_status = data.get('status')
+        notes = data.get('notes', '')
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not new_status:
+        return JsonResponse({"status": "error", "message": "Durum belirtmelisiniz"}, status=400)
+    
+    try:
+        task = ProjectTask.objects(id=ObjectId(task_id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz görev ID"}, status=400)
+    
+    if not task:
+        return JsonResponse({"status": "error", "message": "Görev bulunamadı"}, status=404)
+    
+    # Sadece görevi atanan kişi durumu değiştirebilir
+    if task.assigned_user != user:
+        return JsonResponse({"status": "error", "message": "Bu görevi sadece atanan kişi güncelleyebilir"}, status=403)
+    
+    old_status = task.status
+    task.status = new_status
+    
+    # Eğer görev tamamlandıysa
+    if new_status == 'done':
+        task.completed_at = datetime.utcnow()
+        task.completion_notes = notes
+    
+    task.updated_at = datetime.utcnow()
+    task.save()
+    
+    # Log kaydı oluştur
+    action = 'completed' if new_status == 'done' else 'updated'
+    task_log = TaskLog(
+        task=task,
+        user=user,
+        action=action,
+        notes=notes
+    )
+    task_log.save()
+    
+    return JsonResponse({
+        "status": "ok",
+        "message": f"Görev durumu '{old_status}' -> '{new_status}' olarak güncellendi",
+        "task_id": str(task.id),
+        "new_status": new_status
+    })
+
+@csrf_exempt
+def add_task_log(request, task_id):
+    """Göreve log ekler"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+        notes = data.get('notes', '')
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not action:
+        return JsonResponse({"status": "error", "message": "Aksiyon belirtmelisiniz"}, status=400)
+    
+    try:
+        task = ProjectTask.objects(id=ObjectId(task_id)).first()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz görev ID"}, status=400)
+    
+    if not task:
+        return JsonResponse({"status": "error", "message": "Görev bulunamadı"}, status=404)
+    
+    # Sadece görevi atanan kişi log ekleyebilir
+    if task.assigned_user != user:
+        return JsonResponse({"status": "error", "message": "Bu göreve sadece atanan kişi log ekleyebilir"}, status=403)
+    
+    # Log kaydı oluştur
+    task_log = TaskLog(
+        task=task,
+        user=user,
+        action=action,
+        notes=notes
+    )
+    task_log.save()
+    
+    return JsonResponse({
+        "status": "ok",
+        "message": "Log başarıyla eklendi",
+        "log_id": str(task_log.id)
+    })
+
+@csrf_exempt
+def get_task_notifications(request):
+    """Kullanıcının görev bildirimlerini getirir"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    # Kullanıcının görevlerini al
+    user_tasks = ProjectTask.objects(assigned_user=user, status__in=['to-do', 'in-progress'])
+    
+    notifications = []
+    current_time = datetime.utcnow()
+    
+    for task in user_tasks:
+        # Süresi geçen görevler
+        if task.end_date < current_time and task.status != 'done':
+            notifications.append({
+                'type': 'overdue',
+                'title': 'Süresi Geçen Görev',
+                'message': f'"{task.title}" görevinin süresi geçti',
+                'task_id': str(task.id),
+                'project_title': task.project.title,
+                'days_overdue': (current_time - task.end_date).days
+            })
+        
+        # Yaklaşan görevler (2 gün içinde)
+        elif task.end_date > current_time:
+            days_until_deadline = (task.end_date - current_time).days
+            if days_until_deadline <= 2:
+                notifications.append({
+                    'type': 'upcoming',
+                    'title': 'Yaklaşan Görev',
+                    'message': f'"{task.title}" görevinin bitiş tarihi yaklaşıyor',
+                    'task_id': str(task.id),
+                    'project_title': task.project.title,
+                    'days_until_deadline': days_until_deadline
+                })
+    
+    return JsonResponse({
+        'status': 'ok',
+        'notifications': notifications,
+        'total_count': len(notifications)
+    })
+
+@csrf_exempt
+def mark_notification_as_read(request, notification_id):
+    """Bildirimi okundu olarak işaretler"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    # Bu örnekte basit bir yapı kullanıyoruz
+    # Gerçek uygulamada Notification modeli olabilir
+    
+    return JsonResponse({
+        "status": "ok",
+        "message": "Bildirim okundu olarak işaretlendi"
+    })
+
+@csrf_exempt
+def calculate_user_performance_score(request, user_id=None):
+    """Kullanıcının performans skorunu hesaplar"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    # Eğer user_id belirtilmişse ve admin ise, o kullanıcının skorunu hesapla
+    target_user = user
+    if user_id and is_admin(user):
+        try:
+            target_user = User.objects(id=ObjectId(user_id)).first()
+            if not target_user:
+                return JsonResponse({"status": "error", "message": "Kullanıcı bulunamadı"}, status=404)
+        except Exception:
+            return JsonResponse({"status": "error", "message": "Geçersiz kullanıcı ID"}, status=400)
+    elif user_id and not is_admin(user):
+        return JsonResponse({"status": "error", "message": "Yetkisiz erişim"}, status=403)
+    
+    # Kullanıcının tüm görevlerini al
+    user_tasks = ProjectTask.objects(assigned_user=target_user)
+    
+    total_tasks = len(user_tasks)
+    completed_tasks = len([t for t in user_tasks if t.status == 'done'])
+    overdue_tasks = len([t for t in user_tasks if t.end_date < datetime.utcnow() and t.status != 'done'])
+    on_time_tasks = len([t for t in user_tasks if t.status == 'done' and t.completed_at and t.completed_at <= t.end_date])
+    
+    # Skor hesaplama
+    base_score = 100
+    
+    # Tamamlanan görevler için +10 puan
+    completion_bonus = completed_tasks * 10
+    
+    # Zamanında tamamlanan görevler için +5 puan
+    on_time_bonus = on_time_tasks * 5
+    
+    # Geciken görevler için -15 puan
+    overdue_penalty = overdue_tasks * 15
+    
+    # Toplam skor
+    total_score = base_score + completion_bonus + on_time_bonus - overdue_penalty
+    
+    # Minimum 0, maksimum 1000
+    total_score = max(0, min(1000, total_score))
+    
+    # Performans seviyesi
+    if total_score >= 800:
+        performance_level = "Mükemmel"
+    elif total_score >= 600:
+        performance_level = "İyi"
+    elif total_score >= 400:
+        performance_level = "Orta"
+    elif total_score >= 200:
+        performance_level = "Geliştirilmeli"
+    else:
+        performance_level = "Kritik"
+    
+    return JsonResponse({
+        'status': 'ok',
+        'user_id': str(target_user.id),
+        'user_name': target_user.full_name,
+        'performance_score': total_score,
+        'performance_level': performance_level,
+        'statistics': {
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'overdue_tasks': overdue_tasks,
+            'on_time_tasks': on_time_tasks,
+            'completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2),
+            'on_time_rate': round((on_time_tasks / completed_tasks * 100) if completed_tasks > 0 else 0, 2)
+        },
+        'score_breakdown': {
+            'base_score': base_score,
+            'completion_bonus': completion_bonus,
+            'on_time_bonus': on_time_bonus,
+            'overdue_penalty': overdue_penalty,
+            'total_score': total_score
+        }
+    })
+
+@csrf_exempt
+def get_team_performance_leaderboard(request):
+    """Ekip performans sıralamasını getirir"""
+    user = get_user_from_jwt(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Giriş yapmalısınız"}, status=401)
+    
+    # Tüm kullanıcıların performans skorlarını hesapla
+    all_users = User.objects()
+    leaderboard = []
+    
+    for user_obj in all_users:
+        # Kullanıcının görevlerini al
+        user_tasks = ProjectTask.objects(assigned_user=user_obj)
+        
+        if len(user_tasks) == 0:
+            continue  # Hiç görevi olmayan kullanıcıları atla
+        
+        total_tasks = len(user_tasks)
+        completed_tasks = len([t for t in user_tasks if t.status == 'done'])
+        overdue_tasks = len([t for t in user_tasks if t.end_date < datetime.utcnow() and t.status != 'done'])
+        on_time_tasks = len([t for t in user_tasks if t.status == 'done' and t.completed_at and t.completed_at <= t.end_date])
+        
+        # Skor hesaplama
+        base_score = 100
+        completion_bonus = completed_tasks * 10
+        on_time_bonus = on_time_tasks * 5
+        overdue_penalty = overdue_tasks * 15
+        total_score = max(0, min(1000, base_score + completion_bonus + on_time_bonus - overdue_penalty))
+        
+        leaderboard.append({
+            'user_id': str(user_obj.id),
+            'user_name': user_obj.full_name,
+            'performance_score': total_score,
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 2)
+        })
+    
+    # Skora göre sırala (yüksekten düşüğe)
+    leaderboard.sort(key=lambda x: x['performance_score'], reverse=True)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'leaderboard': leaderboard,
+        'total_participants': len(leaderboard)
     })
