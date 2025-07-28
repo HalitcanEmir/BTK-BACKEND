@@ -53,3 +53,19 @@ class User(Document):
     on_time_tasks = IntField(default=0)  # Zamanında tamamlanan görev sayısı
     average_completion_time = FloatField(default=0.0)  # Ortalama tamamlanma süresi (gün)
     last_performance_update = DateTimeField()  # Son performans güncelleme tarihi
+
+class EmailVerification(Document):
+    """Email doğrulama kodları"""
+    email = StringField(required=True)
+    verification_code = StringField(required=True, max_length=6)
+    is_used = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    expires_at = DateTimeField(required=True)
+    
+    meta = {
+        'indexes': [
+            {'fields': ['email', 'verification_code']},
+            {'fields': ['email', 'is_used']},
+            {'fields': ['expires_at']}
+        ]
+    }

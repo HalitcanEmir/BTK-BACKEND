@@ -14,6 +14,10 @@ import os
 from mongoengine.errors import DoesNotExist
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from .models import EmailVerification
+from .utils import generate_verification_code, send_verification_email, send_welcome_email
+from datetime import datetime, timedelta
+import re
 
 # Create your views here.
 
@@ -1151,3 +1155,232 @@ def upload_cv_view(request):
             })
     
     return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
+
+@csrf_exempt
+def send_verification_code(request):
+    """Email doğrulama kodu gönderir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not email:
+        return JsonResponse({"status": "error", "message": "Email adresi gerekli"}, status=400)
+    
+    # Email formatını kontrol et
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return JsonResponse({"status": "error", "message": "Geçersiz email formatı"}, status=400)
+    
+    # Email zaten kayıtlı mı kontrol et - KALDIRILDI
+    # existing_user = User.objects(email=email).first()
+    # if existing_user:
+    #     return JsonResponse({"status": "error", "message": "Bu email adresi zaten kayıtlı"}, status=400)
+    
+    # Eski doğrulama kodlarını temizle - KALDIRILDI
+    # EmailVerification.objects(email=email, is_used=False).delete()
+    
+    # Yeni doğrulama kodu oluştur
+    verification_code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    # Veritabanına kaydet
+    verification = EmailVerification(
+        email=email,
+        verification_code=verification_code,
+        expires_at=expires_at
+    )
+    verification.save()
+    
+    # Email gönder
+    email_sent = send_verification_email(email, verification_code)
+    
+    if email_sent:
+        return JsonResponse({
+            "status": "ok",
+            "message": "Doğrulama kodu email adresinize gönderildi. Lütfen email'inizi kontrol edin.",
+            "email": email
+        })
+    else:
+        # Email gönderilemezse veritabanından sil
+        verification.delete()
+        return JsonResponse({
+            "status": "error",
+            "message": "Email gönderilemedi. Lütfen tekrar deneyin."
+        }, status=500)
+
+@csrf_exempt
+def verify_email_and_register(request):
+    """Email doğrulama ve kayıt işlemi"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        verification_code = data.get('verification_code', '').strip()
+        full_name = data.get('full_name', '').strip()
+        password = data.get('password', '')
+        user_type = data.get('user_type', [])
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    # Validasyon
+    if not all([email, verification_code, full_name, password]):
+        return JsonResponse({"status": "error", "message": "Tüm alanlar gerekli"}, status=400)
+    
+    if len(password) < 6:
+        return JsonResponse({"status": "error", "message": "Şifre en az 6 karakter olmalı"}, status=400)
+    
+    # Doğrulama kodunu kontrol et
+    verification = EmailVerification.objects(
+        email=email,
+        verification_code=verification_code,
+        is_used=False,
+        expires_at__gt=datetime.utcnow()
+    ).first()
+    
+    if not verification:
+        return JsonResponse({"status": "error", "message": "Geçersiz veya süresi dolmuş doğrulama kodu"}, status=400)
+    
+    # Email zaten kayıtlı mı kontrol et
+    existing_user = User.objects(email=email).first()
+    if existing_user:
+        return JsonResponse({"status": "error", "message": "Bu email adresi zaten kayıtlı"}, status=400)
+    
+    try:
+        # Kullanıcıyı oluştur
+        hashed_password = hash_password(password)
+        user = User(
+            email=email,
+            password_hash=hashed_password,
+            full_name=full_name,
+            user_type=user_type if user_type else ['developer'],
+            created_at=datetime.utcnow()
+        )
+        user.save()
+        
+        # Doğrulama kodunu kullanıldı olarak işaretle
+        verification.is_used = True
+        verification.save()
+        
+        # Hoş geldin email'i gönder
+        send_welcome_email(email, full_name)
+        
+        # JWT token oluştur
+        token = jwt.encode(
+            {
+                'email': user.email,
+                'exp': datetime.utcnow() + timedelta(hours=24)
+            },
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM
+        )
+        
+        return JsonResponse({
+            "status": "ok",
+            "message": "Kayıt başarılı! Hoş geldiniz.",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "user_type": user.user_type
+            },
+            "token": token
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Kayıt sırasında hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+def resend_verification_code(request):
+    """Doğrulama kodunu tekrar gönderir"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+    except Exception:
+        return JsonResponse({"status": "error", "message": "Geçersiz JSON"}, status=400)
+    
+    if not email:
+        return JsonResponse({"status": "error", "message": "Email adresi gerekli"}, status=400)
+    
+    # Kullanıcı zaten kayıtlı mı kontrol et - KALDIRILDI
+    # existing_user = User.objects(email=email).first()
+    # if existing_user:
+    #     return JsonResponse({"status": "error", "message": "Bu email adresi zaten kayıtlı"}, status=400)
+    
+    # Eski doğrulama kodlarını temizle - KALDIRILDI
+    # EmailVerification.objects(email=email, is_used=False).delete()
+    
+    # Yeni kod oluştur
+    verification_code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    verification = EmailVerification(
+        email=email,
+        verification_code=verification_code,
+        expires_at=expires_at
+    )
+    verification.save()
+    
+    # Email gönder
+    email_sent = send_verification_email(email, verification_code)
+    
+    if email_sent:
+        return JsonResponse({
+            "status": "ok",
+            "message": "Yeni doğrulama kodu gönderildi. Lütfen email'inizi kontrol edin.",
+            "email": email
+        })
+    else:
+        verification.delete()
+        return JsonResponse({
+            "status": "error",
+            "message": "Email gönderilemedi. Lütfen tekrar deneyin."
+        }, status=500)
+
+@csrf_exempt
+def test_email_settings(request):
+    """Email ayarlarını test eder"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        test_email = data.get('email', 'test@example.com')
+    except Exception:
+        test_email = 'test@example.com'
+    
+    from .utils import test_email_configuration, get_email_settings_info
+    
+    # Ayarları göster
+    settings_info = get_email_settings_info()
+    
+    # Test et
+    test_result = test_email_configuration()
+    
+    if test_result:
+        return JsonResponse({
+            "status": "ok",
+            "message": "Email ayarları başarılı!",
+            "settings": settings_info,
+            "test_email": test_email
+        })
+    else:
+        return JsonResponse({
+            "status": "error",
+            "message": "Email ayarlarında hata var!",
+            "settings": settings_info,
+            "test_email": test_email
+        }, status=500)

@@ -16,6 +16,11 @@ urlpatterns = [
     path('admin/verification-requests', views.admin_verification_requests, name='admin_verification_requests'),
     path('admin/approve-verification', views.admin_approve_verification, name='admin_approve_verification'),
     path('admin/reject-verification', views.admin_reject_verification, name='admin_reject_verification'),
+    # Email doğrulama endpoint'leri
+    path('send-verification-code', views.send_verification_code, name='send_verification_code'),
+    path('verify-email-and-register', views.verify_email_and_register, name='verify_email_and_register'),
+    path('resend-verification-code', views.resend_verification_code, name='resend_verification_code'),
+    path('test-email-settings', views.test_email_settings, name='test_email_settings'),
 ]
 
 urlpatterns += [

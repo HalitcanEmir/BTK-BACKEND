@@ -838,3 +838,81 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 ```
 
 --- 
+
+### Email Doğrulama Kodu Gönderme
+
+**Endpoint:** `POST /api/auth/send-verification-code`
+
+**Açıklama:** Email adresine doğrulama kodu gönderir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Doğrulama kodu email adresinize gönderildi",
+  "email": "user@example.com"
+}
+```
+
+### Email Doğrulama ve Kayıt
+
+**Endpoint:** `POST /api/auth/verify-email-and-register`
+
+**Açıklama:** Doğrulama kodunu kontrol eder ve kullanıcıyı kaydeder.
+
+**Body:**
+```json
+{
+  "email": "user@example.com",
+  "verification_code": "123456",
+  "full_name": "John Doe",
+  "password": "securepassword123",
+  "user_type": ["developer"]
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Kayıt başarılı! Hoş geldiniz.",
+  "user": {
+    "id": "507f1f77bcf86cd799439011",
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "user_type": ["developer"]
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### Doğrulama Kodunu Tekrar Gönderme
+
+**Endpoint:** `POST /api/auth/resend-verification-code`
+
+**Açıklama:** Doğrulama kodunu tekrar gönderir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Yeni doğrulama kodu gönderildi",
+  "email": "user@example.com"
+}
+```
+
+--- 

@@ -90,6 +90,20 @@ connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
 # Gemini AI API Key
 GEMINI_API_KEY = 'AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q'
 
+# Email Settings
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587
+SMTP_USERNAME = 'madeinyouutr@gmail.com'  # ✅ Gmail adresiniz
+SMTP_PASSWORD = 'xaus dyhb qqyb ikij'    # ✅ 16 haneli App Password
+
+# Örnek:
+# SMTP_USERNAME = 'btkbackend@gmail.com'
+# SMTP_PASSWORD = 'abcd efgh ijkl mnop'
+
+# JWT Settings
+JWT_SECRET_KEY = 'your-jwt-secret-key-here'
+JWT_ALGORITHM = 'HS256'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -131,8 +145,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# JWT ayarları
-JWT_SECRET_KEY = SECRET_KEY  # Güvenlik için production'da farklı bir anahtar kullanın
-JWT_ALGORITHM = 'HS256'
-JWT_MAGICLINK_EXP_MINUTES = 15  # Magic link süresi (dakika)

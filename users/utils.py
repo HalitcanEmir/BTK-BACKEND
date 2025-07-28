@@ -12,6 +12,11 @@ import fitz  # PyMuPDF
 import re
 from unidecode import unidecode
 import PyPDF2
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import random
+import string
 
 # Şifreyi hashler
 def hash_password(password):
@@ -540,3 +545,134 @@ Sadece JSON döndür, başka açıklama ekleme."""
             
     except Exception as e:
         return {"error": f"Gemini API hatası: {str(e)}"} 
+
+def generate_verification_code():
+    """6 haneli doğrulama kodu oluşturur"""
+    return ''.join(random.choices(string.digits, k=6))
+
+def send_verification_email(email, verification_code):
+    """Doğrulama email'i gönderir"""
+    try:
+        from config.settings import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+        
+        # Email içeriği
+        subject = "BTK Backend - Email Doğrulama Kodu"
+        body = f"""
+        Merhaba!
+        
+        BTK Backend sistemine kayıt olmak için doğrulama kodunuz: {verification_code}
+        
+        Bu kod 10 dakika geçerlidir.
+        
+        Eğer bu işlemi siz yapmadıysanız, bu email'i görmezden gelebilirsiniz.
+        
+        Saygılarımızla,
+        BTK Backend Ekibi
+        """
+        
+        # Email oluştur
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # SMTP bağlantısı
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        
+        # Email gönder
+        text = msg.as_string()
+        server.sendmail(SMTP_USERNAME, email, text)
+        server.quit()
+        
+        print(f"✅ Doğrulama email'i gönderildi: {email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Email gönderme hatası: {str(e)}")
+        return False
+
+def send_welcome_email(email, full_name):
+    """Hoş geldin email'i gönderir"""
+    try:
+        from config.settings import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
+        
+        # Email içeriği
+        subject = "BTK Backend - Hoş Geldiniz!"
+        body = f"""
+        Merhaba {full_name}!
+        
+        BTK Backend sistemine başarıyla kayıt oldunuz!
+        
+        Artık projelere başvurabilir, görevler alabilir ve ekibin bir parçası olabilirsiniz.
+        
+        Başarılar dileriz!
+        
+        Saygılarımızla,
+        BTK Backend Ekibi
+        """
+        
+        # Email oluştur
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # SMTP bağlantısı
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        
+        # Email gönder
+        text = msg.as_string()
+        server.sendmail(SMTP_USERNAME, email, text)
+        server.quit()
+        
+        print(f"✅ Hoş geldin email'i gönderildi: {email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Hoş geldin email hatası: {str(e)}")
+        return False
+
+def test_email_configuration():
+    """Email ayarlarını test eder"""
+    try:
+        # Test email'i gönder
+        test_email = "test@example.com"
+        test_code = "123456"
+        
+        result = send_verification_email(test_email, test_code)
+        
+        if result:
+            print("✅ Email ayarları başarılı!")
+            print(f"Test email'i gönderildi: {test_email}")
+            return True
+        else:
+            print("❌ Email gönderilemedi!")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Email hatası: {str(e)}")
+        return False
+
+def get_email_settings_info():
+    """Email ayarlarını gösterir"""
+    from config.settings import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME
+    
+    print("📧 Email Ayarları:")
+    print(f"SMTP Server: {SMTP_SERVER}")
+    print(f"SMTP Port: {SMTP_PORT}")
+    print(f"Username: {SMTP_USERNAME}")
+    print(f"Password: {'*' * 10} (gizli)")
+    
+    return {
+        'server': SMTP_SERVER,
+        'port': SMTP_PORT,
+        'username': SMTP_USERNAME
+    } 
