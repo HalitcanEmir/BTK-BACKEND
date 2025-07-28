@@ -25,6 +25,16 @@ urlpatterns = [
     path('send-password-reset-code', views.send_password_reset_code, name='send_password_reset_code'),
     path('verify-reset-code-and-change-password', views.verify_reset_code_and_change_password, name='verify_reset_code_and_change_password'),
     path('resend-password-reset-code', views.resend_password_reset_code, name='resend_password_reset_code'),
+    # Profil yönetimi endpoint'leri
+    path('update-profile', views.update_profile, name='update_profile'),
+    path('upload-avatar', views.upload_avatar, name='upload_avatar'),
+    path('delete-account', views.delete_account, name='delete_account'),
+    # Arkadaşlık sistemi endpoint'leri
+    path('send-friend-request', views.send_friend_request, name='send_friend_request'),
+    path('respond-to-friend-request', views.respond_to_friend_request, name='respond_to_friend_request'),
+    path('friend-requests', views.get_friend_requests, name='get_friend_requests'),
+    path('friends', views.get_friends, name='get_friends'),
+    path('remove-friend', views.remove_friend, name='remove_friend'),
 ]
 
 urlpatterns += [

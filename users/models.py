@@ -1,5 +1,5 @@
 from django.db import models
-from mongoengine import Document, StringField, DateTimeField, BooleanField, ListField, IntField, FloatField
+from mongoengine import Document, StringField, DateTimeField, BooleanField, ListField, IntField, FloatField, ReferenceField
 import datetime
 
 # Create your models here.
@@ -8,42 +8,34 @@ class User(Document):
     email = StringField(required=True, unique=True)
     password_hash = StringField(required=True)
     full_name = StringField(required=True)
-    user_type = ListField(StringField())  # ['developer', 'investor', 'admin']
+    user_type = ListField(StringField(), default=['developer'])
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.datetime.utcnow)
+    
+    # Profil bilgileri
+    avatar = StringField()  # Avatar URL'i
+    bio = StringField(max_length=500)  # Kullanıcı hakkında
+    location = StringField()  # Konum
+    website = StringField()  # Kişisel website
+    phone = StringField()  # Telefon numarası
+    
+    # Sosyal medya
+    github_username = StringField()
+    linkedin_username = StringField()
+    twitter_username = StringField()
+    
+    # Arkadaşlık sistemi
+    friends = ListField(ReferenceField('User'), default=[])  # Arkadaşlar
+    friend_requests = ListField(ReferenceField('User'), default=[])  # Gelen arkadaşlık istekleri
+    sent_friend_requests = ListField(ReferenceField('User'), default=[])  # Gönderilen arkadaşlık istekleri
+    
+    # Doğrulama alanları
+    identity_verified = BooleanField(default=False)
+    verified_name = StringField()
+    verified_surname = StringField()
     github_verified = BooleanField(default=False)
     linkedin_verified = BooleanField(default=False)
     can_invest = BooleanField(default=False)
-    created_at = DateTimeField()
-    
-    # Kimlik doğrulama alanları
-    id_card_image_url = StringField()  # Kimlik görseli URL'si
-    verified_name = StringField()  # Kimlikten çıkarılan ad
-    verified_surname = StringField()  # Kimlikten çıkarılan soyad
-    identity_verified = BooleanField(default=False)  # Kimlik doğrulandı mı?
-    
-    # LinkedIn alanları
-    linkedin_url = StringField()  # LinkedIn profil URL'si
-    linkedin_name = StringField()  # LinkedIn'den çıkarılan ad
-    linkedin_verified = BooleanField(default=False)  # LinkedIn doğrulandı mı?
-    
-    # AI analiz sonuçları
-    languages_known = StringField()  # JSON string olarak beceriler
-    experience_estimate = StringField()  # Tahmini deneyim süresi
-    profile_summary = StringField()  # AI özeti
-    technical_analysis = StringField()  # Teknik analiz JSON
-    
-    # Doğrulama durumu
-    verification_status = StringField(default='pending', choices=['pending', 'id_verified', 'verified', 'rejected'])
-    verification_notes = StringField()  # Doğrulama notları
-    tc_verified = StringField()  # Kimlikten doğrulanan T.C. Kimlik No
-    
-    # CV doğrulama alanları
-    cv_file = StringField()  # CV dosyası URL'si
-    cv_verified = BooleanField(default=False)  # CV doğrulandı mı?
-    cv_name_detected = StringField()  # CV'den tespit edilen ad-soyad
-    
-    # Programlama dilleri ve seviyeleri
-    known_languages = ListField(StringField())  # Bilinen diller listesi
-    language_levels = StringField()  # Dillerin seviyeleri JSON string
     
     # Performans skoru alanları
     reliability_score = IntField(default=100)  # Güven skoru (0-1000)
@@ -53,6 +45,38 @@ class User(Document):
     on_time_tasks = IntField(default=0)  # Zamanında tamamlanan görev sayısı
     average_completion_time = FloatField(default=0.0)  # Ortalama tamamlanma süresi (gün)
     last_performance_update = DateTimeField()  # Son performans güncelleme tarihi
+    
+    # Hesap durumu
+    is_active = BooleanField(default=True)  # Hesap aktif mi
+    is_deleted = BooleanField(default=False)  # Hesap silinmiş mi
+    deleted_at = DateTimeField()  # Silinme tarihi
+    
+    meta = {
+        'indexes': [
+            {'fields': ['email']},
+            {'fields': ['user_type']},
+            {'fields': ['identity_verified']},
+            {'fields': ['reliability_score']},
+            {'fields': ['is_active']},
+            {'fields': ['is_deleted']}
+        ]
+    }
+
+class FriendRequest(Document):
+    """Arkadaşlık istekleri"""
+    from_user = ReferenceField('User', required=True)
+    to_user = ReferenceField('User', required=True)
+    status = StringField(choices=['pending', 'accepted', 'rejected'], default='pending')
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.datetime.utcnow)
+    
+    meta = {
+        'indexes': [
+            {'fields': ['from_user', 'to_user'], 'unique': True},
+            {'fields': ['to_user', 'status']},
+            {'fields': ['status']}
+        ]
+    }
 
 class EmailVerification(Document):
     """Email doğrulama kodları"""

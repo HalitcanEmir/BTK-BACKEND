@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required
 from .models import EmailVerification
 from datetime import datetime, timedelta
 import re
+from .models import FriendRequest
 
 # Create your views here.
 
@@ -1519,6 +1520,167 @@ def resend_password_reset_code(request):
         return JsonResponse({
             "status": "error",
             "message": "Email gönderilemedi. Lütfen tekrar deneyin."
+        }, status=500)
+
+@csrf_exempt
+def update_profile(request):
+    """Kullanıcı profilini günceller"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_token(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Geçersiz token"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Güncellenebilir alanlar
+        if 'full_name' in data:
+            user.full_name = data['full_name'].strip()
+        
+        if 'bio' in data:
+            user.bio = data['bio'].strip()
+        
+        if 'location' in data:
+            user.location = data['location'].strip()
+        
+        if 'website' in data:
+            user.website = data['website'].strip()
+        
+        if 'phone' in data:
+            user.phone = data['phone'].strip()
+        
+        if 'github_username' in data:
+            user.github_username = data['github_username'].strip()
+        
+        if 'linkedin_username' in data:
+            user.linkedin_username = data['linkedin_username'].strip()
+        
+        if 'twitter_username' in data:
+            user.twitter_username = data['twitter_username'].strip()
+        
+        user.updated_at = datetime.utcnow()
+        user.save()
+        
+        return JsonResponse({
+            "status": "ok",
+            "message": "Profil başarıyla güncellendi",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "bio": user.bio,
+                "location": user.location,
+                "website": user.website,
+                "phone": user.phone,
+                "github_username": user.github_username,
+                "linkedin_username": user.linkedin_username,
+                "twitter_username": user.twitter_username,
+                "avatar": user.avatar
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Profil güncellenirken hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+def upload_avatar(request):
+    """Avatar yükler"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_token(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Geçersiz token"}, status=401)
+    
+    try:
+        if 'avatar' not in request.FILES:
+            return JsonResponse({"status": "error", "message": "Avatar dosyası gerekli"}, status=400)
+        
+        avatar_file = request.FILES['avatar']
+        
+        # Dosya boyutu kontrolü (5MB)
+        if avatar_file.size > 5 * 1024 * 1024:
+            return JsonResponse({"status": "error", "message": "Dosya boyutu 5MB'dan küçük olmalı"}, status=400)
+        
+        # Dosya tipi kontrolü
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+        if avatar_file.content_type not in allowed_types:
+            return JsonResponse({"status": "error", "message": "Sadece JPEG, PNG ve GIF dosyaları kabul edilir"}, status=400)
+        
+        # Dosya adını oluştur
+        import uuid
+        file_extension = avatar_file.name.split('.')[-1]
+        filename = f"avatar_{user.id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        
+        # Dosyayı kaydet (gerçek uygulamada cloud storage kullanılır)
+        import os
+        upload_dir = 'uploads/avatars/'
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        file_path = os.path.join(upload_dir, filename)
+        with open(file_path, 'wb+') as destination:
+            for chunk in avatar_file.chunks():
+                destination.write(chunk)
+        
+        # Avatar URL'ini güncelle
+        avatar_url = f"/media/avatars/{filename}"
+        user.avatar = avatar_url
+        user.updated_at = datetime.utcnow()
+        user.save()
+        
+        return JsonResponse({
+            "status": "ok",
+            "message": "Avatar başarıyla yüklendi",
+            "avatar_url": avatar_url
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Avatar yüklenirken hata oluştu",
+            "error": str(e)
+        }, status=500)
+
+@csrf_exempt
+def delete_account(request):
+    """Kullanıcı hesabını siler"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "POST olmalı"}, status=405)
+    
+    user = get_user_from_token(request)
+    if not user:
+        return JsonResponse({"status": "error", "message": "Geçersiz token"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        password = data.get('password', '')
+        
+        # Şifre doğrulama
+        if not check_password(password, user.password_hash):
+            return JsonResponse({"status": "error", "message": "Şifre yanlış"}, status=400)
+        
+        # Hesabı sil (soft delete)
+        user.is_active = False
+        user.is_deleted = True
+        user.deleted_at = datetime.utcnow()
+        user.save()
+        
+        return JsonResponse({
+            "status": "ok",
+            "message": "Hesabınız başarıyla silindi"
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": "Hesap silinirken hata oluştu",
+            "error": str(e)
         }, status=500)
 
 @csrf_exempt

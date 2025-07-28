@@ -1027,3 +1027,216 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 ```
 
 --- 
+
+### Profil Güncelleme
+
+**Endpoint:** `POST /api/auth/update-profile`
+
+**Açıklama:** Kullanıcı profilini günceller.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "full_name": "John Doe",
+  "bio": "Full-stack developer with 5 years experience",
+  "location": "Istanbul, Turkey",
+  "website": "https://johndoe.com",
+  "phone": "+90 555 123 4567",
+  "github_username": "johndoe",
+  "linkedin_username": "johndoe",
+  "twitter_username": "johndoe"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Profil başarıyla güncellendi",
+  "user": {
+    "id": "507f1f77bcf86cd799439011",
+    "email": "john@example.com",
+    "full_name": "John Doe",
+    "bio": "Full-stack developer with 5 years experience",
+    "location": "Istanbul, Turkey",
+    "website": "https://johndoe.com",
+    "phone": "+90 555 123 4567",
+    "github_username": "johndoe",
+    "linkedin_username": "johndoe",
+    "twitter_username": "johndoe",
+    "avatar": "/media/avatars/avatar_123.jpg"
+  }
+}
+```
+
+### Avatar Yükleme
+
+**Endpoint:** `POST /api/auth/upload-avatar`
+
+**Açıklama:** Kullanıcı avatarını yükler.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:** `multipart/form-data`
+- `avatar`: Image file (JPEG, PNG, GIF, max 5MB)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Avatar başarıyla yüklendi",
+  "avatar_url": "/media/avatars/avatar_123_abc12345.jpg"
+}
+```
+
+### Hesap Silme
+
+**Endpoint:** `POST /api/auth/delete-account`
+
+**Açıklama:** Kullanıcı hesabını siler (soft delete).
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "password": "currentpassword123"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Hesabınız başarıyla silindi"
+}
+```
+
+### Arkadaşlık İsteği Gönderme
+
+**Endpoint:** `POST /api/auth/send-friend-request`
+
+**Açıklama:** Arkadaşlık isteği gönderir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "to_user_id": "507f1f77bcf86cd799439012"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Arkadaşlık isteği gönderildi",
+  "request_id": "507f1f77bcf86cd799439013"
+}
+```
+
+### Arkadaşlık İsteğine Yanıt Verme
+
+**Endpoint:** `POST /api/auth/respond-to-friend-request`
+
+**Açıklama:** Gelen arkadaşlık isteğine yanıt verir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "request_id": "507f1f77bcf86cd799439013",
+  "action": "accept"  // "accept" veya "reject"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Arkadaşlık isteği kabul edildi"
+}
+```
+
+### Arkadaşlık İsteklerini Getirme
+
+**Endpoint:** `GET /api/auth/friend-requests`
+
+**Açıklama:** Gelen arkadaşlık isteklerini getirir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "requests": [
+    {
+      "id": "507f1f77bcf86cd799439013",
+      "from_user": {
+        "id": "507f1f77bcf86cd799439012",
+        "full_name": "Jane Doe",
+        "avatar": "/media/avatars/avatar_456.jpg"
+      },
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### Arkadaş Listesini Getirme
+
+**Endpoint:** `GET /api/auth/friends`
+
+**Açıklama:** Arkadaş listesini getirir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "friends": [
+    {
+      "id": "507f1f77bcf86cd799439012",
+      "full_name": "Jane Doe",
+      "avatar": "/media/avatars/avatar_456.jpg",
+      "bio": "Frontend developer",
+      "location": "Ankara, Turkey",
+      "user_type": ["developer"],
+      "reliability_score": 85
+    }
+  ],
+  "count": 1
+}
+```
+
+### Arkadaşı Kaldırma
+
+**Endpoint:** `POST /api/auth/remove-friend`
+
+**Açıklama:** Arkadaşı kaldırır.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "friend_id": "507f1f77bcf86cd799439012"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Arkadaş kaldırıldı"
+}
+```
+
+--- 
