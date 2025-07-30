@@ -7,6 +7,10 @@ from .models import User
 from .utils import hash_password, check_password
 import jwt
 from django.conf import settings
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
+from datetime import datetime, timedelta
+from django.conf import settings
 
 # Create your views here.
 
@@ -119,6 +123,48 @@ def register(request):
 # E-posta Doğrulama
 # GET /api/auth/verify-email
 # Açıklama: E-posta doğrulama endpointi
+
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def reset_password_request(request):
+    if request.method != "POST":
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+    try:
+        data = json.loads(request.body)
+        email = data.get("email")
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
+    user = User.objects(email=email).first()
+    if user:
+        token = get_random_string(64)
+        user.reset_token = token
+        user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+        user.save()
+        reset_link = f"{settings.SITE_URL}/api/auth/reset-password-confirm/{token}/"
+        send_mail(
+            "Şifre Sıfırlama",
+            f"Şifrenizi sıfırlamak için bu linke tıklayın: {reset_link}",
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+        )
+    return JsonResponse({'status': 'ok', 'message': 'Eğer e-posta kayıtlıysa, sıfırlama linki gönderildi.'})    @csrf_exempt
+    def reset_password_confirm(request, token):
+        if request.method != "POST":
+            return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+        try:
+            data = json.loads(request.body)
+            new_password = data.get("password")
+        except Exception:
+            return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
+        user = User.objects(reset_token=token, reset_token_expiry__gte=datetime.utcnow()).first()
+        if not user:
+            return JsonResponse({'status': 'error', 'message': 'Token geçersiz veya süresi dolmuş'})
+        user.password_hash = hash_password(new_password)
+        user.reset_token = None
+        user.reset_token_expiry = None
+        user.save()
+        return JsonResponse({'status': 'ok', 'message': 'Şifreniz başarıyla değiştirildi.'})
 def verify_email(request):
     return JsonResponse({"message": "E-posta Doğrulama"})
 
@@ -151,3 +197,21 @@ def edit_profile(request):
 # Açıklama: Kullanıcı rol ayarlarını günceller
 def edit_roles(request):
     return JsonResponse({"message": "Rol Ayarları"})
+
+@csrf_exempt
+def reset_password_confirm(request, token):
+    if request.method != "POST":
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+    try:
+        data = json.loads(request.body)
+        new_password = data.get("password")
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
+    user = User.objects(reset_token=token, reset_token_expiry__gte=datetime.utcnow()).first()
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Token geçersiz veya süresi dolmuş'})
+    user.password_hash = hash_password(new_password)
+    user.reset_token = None
+    user.reset_token_expiry = None
+    user.save()
+    return JsonResponse({'status': 'ok', 'message': 'Şifreniz başarıyla değiştirildi.'})

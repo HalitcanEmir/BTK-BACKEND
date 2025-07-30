@@ -11,3 +11,8 @@ class User(Document):
     linkedin_verified = BooleanField(default=False)  # LinkedIn doğrulama durumu
     can_invest = BooleanField(default=False)  # Yatırım yapabilir mi?
     created_at = DateTimeField(default=datetime.datetime.utcnow)  # Kayıt tarihi
+
+    reset_token = StringField()  # Şifre sıfırlama token'ı
+    reset_token_expiry = DateTimeField()  # Token'ın geçerlilik süresi
+
+    

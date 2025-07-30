@@ -80,12 +80,10 @@ WSGI_APPLICATION = 'btkproject.wsgi.application'
 #     }
 # }
 
-# MongoDB bağlantısı için mongoengine ayarları
+# MongoDB bağlantısı için mongoengine ayarları (Atlas kullanımı)
 from mongoengine import connect
-MONGODB_NAME = 'btkdb'
-MONGODB_HOST = 'localhost'
-MONGODB_PORT = 27017
-connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
+MONGODB_URI = 'mongodb+srv://<username>:<password>@<cluster-url>/<dbname>?retryWrites=true&w=majority'
+connect(host=MONGODB_URI)
 
 
 # Password validation
@@ -128,3 +126,19 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# E-posta ayarları (örnek, kendi SMTP bilgilerinle değiştir)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'talhatrlbz@gmail.com'  # Buraya kendi e-posta adresini yaz
+EMAIL_HOST_PASSWORD = 'talha123'         # Buraya uygulama şifreni yaz
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Şifre sıfırlama linki için site adresi
+SITE_URL = 'http://localhost:8000'
+
+# JWT ayarları
+JWT_SECRET_KEY = SECRET_KEY  # Production'da farklı bir anahtar kullanın
+JWT_ALGORITHM = 'HS256'
