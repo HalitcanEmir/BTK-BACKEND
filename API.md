@@ -299,6 +299,793 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 
 ---
 
+## Fikir Analizi Sistemi
+
+### Proje Fikri Analizi
+
+**Endpoint:** `POST /ideas/analyze-project/`
+
+**Açıklama:** Girilen proje fikrini Gemini AI ile analiz eder ve teknoloji önerileri, ekip büyüklüğü, süre tahmini gibi bilgiler verir.
+
+**Headers:** `Authorization: Bearer <token>` (opsiyonel)
+
+**Body:**
+```json
+{
+  "description": "E-ticaret platformu geliştirmek istiyorum. Kullanıcılar ürün satabilir, alabilir ve ödeme yapabilir. Ayrıca AI destekli ürün önerisi sistemi olsun."
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "success": true,
+  "analysis": {
+    "technologies": ["Python", "Django", "React", "PostgreSQL", "Redis", "OpenAI API"],
+    "skill_level": "Orta",
+    "team_size": 4,
+    "roles": ["Backend Developer", "Frontend Developer", "DevOps Engineer", "AI/ML Engineer"],
+    "estimated_duration": "3-4 hafta",
+    "notes": "AI öneri sistemi için veri toplama ve model eğitimi kritik. Ödeme sistemi entegrasyonu için güvenlik önlemleri alınmalı."
+  }
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "success": false,
+  "error": "Proje açıklaması gerekli."
+}
+```
+
+### Proje Analizi Kaydetme
+
+**Endpoint:** `POST /ideas/save-analysis/`
+
+**Açıklama:** Yapılan proje analizini veritabanına kaydeder.
+
+**Headers:** `Authorization: Bearer <token>` (opsiyonel)
+
+**Body:**
+```json
+{
+  "idea_id": "507f1f77bcf86cd799439011",
+  "analysis": {
+    "technologies": ["Python", "Django", "React", "PostgreSQL"],
+    "skill_level": "Orta",
+    "team_size": 3,
+    "roles": ["Backend Developer", "Frontend Developer", "DevOps Engineer"],
+    "estimated_duration": "2-3 hafta",
+    "notes": "API güvenliği ve veri doğrulama kritik."
+  }
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "success": true,
+  "message": "Proje analizi başarıyla kaydedildi.",
+  "analysis_id": "507f1f77bcf86cd799439012"
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "success": false,
+  "error": "Idea ID ve analiz verisi gerekli."
+}
+```
+
+### Fikir Gönderme (Analiz ile)
+
+**Endpoint:** `POST /ideas/submit-idea`
+
+**Açıklama:** Yeni fikir gönderir ve otomatik analiz yapar.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "title": "AI Destekli E-Ticaret Platformu",
+  "description": "Kullanıcıların ürün satıp alabileceği, AI destekli öneri sistemi olan modern e-ticaret platformu.",
+  "category": "e-commerce",
+  "license_accepted": true,
+  "auto_analyze": true
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Fikir başarıyla gönderildi ve analiz edildi.",
+  "idea": {
+    "id": "507f1f77bcf86cd799439011",
+    "title": "AI Destekli E-Ticaret Platformu",
+    "description": "Kullanıcıların ürün satıp alabileceği, AI destekli öneri sistemi olan modern e-ticaret platformu.",
+    "category": "e-commerce",
+    "status": "pending",
+    "created_at": "2024-01-15T10:30:00Z"
+  },
+  "analysis": {
+    "technologies": ["Python", "Django", "React", "PostgreSQL", "OpenAI API"],
+    "skill_level": "Orta",
+    "team_size": 4,
+    "roles": ["Backend Developer", "Frontend Developer", "DevOps Engineer", "AI/ML Engineer"],
+    "estimated_duration": "3-4 hafta",
+    "notes": "AI öneri sistemi için veri toplama ve model eğitimi kritik."
+  }
+}
+```
+
+---
+
+## Yatırım Sistemi
+
+### Yatırım Teklifi Gönderme
+
+**Endpoint:** `POST /projects/{id}/invest`
+
+**Açıklama:** Yatırımcılar projelere yatırım teklifi gönderir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "amount": 5000,
+  "description": "Bu projeye güveniyorum ve yatırım yapmak istiyorum."
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Yatırım teklifi gönderildi",
+  "offer_id": "0"
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "status": "error",
+  "message": "Sadece yatırımcılar yatırım yapabilir"
+}
+```
+
+### Yatırım Teklifini Onaylama
+
+**Endpoint:** `POST /projects/{project_id}/investment-offers/{offer_id}/approve`
+
+**Açıklama:** Proje sahibi yatırım teklifini onaylar.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Yatırım teklifi onaylandı"
+}
+```
+
+### Yatırım Teklifini Reddetme
+
+**Endpoint:** `POST /projects/{project_id}/investment-offers/{offer_id}/reject`
+
+**Açıklama:** Proje sahibi yatırım teklifini reddeder.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "reason": "Şu an için yatırıma ihtiyacımız yok."
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Yatırım teklifi reddedildi"
+}
+```
+
+### Proje Yatırım Tavsiyesi
+
+**Endpoint:** `GET /projects/{id}/investment-advice`
+
+**Açıklama:** Gemini AI ile proje için yatırım tavsiyesi alır.
+
+**Headers:** `Authorization: Bearer <token>` (opsiyonel)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "advice": {
+    "investment_recommendation": "Önerilen",
+    "risk_level": "Orta",
+    "potential_return": "Yüksek",
+    "investment_amount": "5000-10000 TL",
+    "reasoning": "Proje teknolojik açıdan güçlü ve pazar potansiyeli var.",
+    "risks": ["Rekabet yoğun", "Teknoloji riski"],
+    "opportunities": ["Büyüme potansiyeli", "Teknoloji avantajı"]
+  }
+}
+```
+
+---
+
+## Proje AI Analizi
+
+### Proje AI Analizi
+
+**Endpoint:** `GET /projects/{id}/analyze`
+
+**Açıklama:** Gemini AI ile proje detaylı analizi yapar.
+
+**Headers:** `Authorization: Bearer <token>` (opsiyonel)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "analysis": {
+    "market_analysis": "E-ticaret pazarı büyüyor",
+    "technical_feasibility": "Yüksek",
+    "competitive_advantage": "AI destekli öneri sistemi",
+    "development_challenges": ["Ölçeklenebilirlik", "Güvenlik"],
+    "success_probability": "75%",
+    "recommendations": [
+      "MVP ile başlayın",
+      "Kullanıcı geri bildirimi toplayın",
+      "Güvenlik önlemlerini artırın"
+    ]
+  }
+}
+```
+
+### Proje Beğeni Sistemi
+
+**Endpoint:** `POST /projects/{id}/like`
+
+**Açıklama:** Projeyi beğenir veya beğenmekten vazgeçer.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje beğenildi",
+  "likes_count": 15
+}
+```
+
+### Proje Liderlik Tablosu
+
+**Endpoint:** `GET /projects/leaderboard`
+
+**Açıklama:** En çok beğenilen projeleri listeler.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "leaderboard": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "title": "AI Destekli E-Ticaret Platformu",
+      "likes_count": 25,
+      "owner_name": "Ahmet Yılmaz",
+      "category": "e-commerce"
+    }
+  ]
+}
+```
+
+---
+
+## Proje Tamamlama Sistemi
+
+### Proje Tamamlama İsteği
+
+**Endpoint:** `POST /projects/{id}/request-completion`
+
+**Açıklama:** Proje sahibi projeyi tamamlandı olarak işaretlemek için istek gönderir.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "completion_notes": "Tüm özellikler tamamlandı ve test edildi.",
+  "demo_url": "https://demo.example.com",
+  "github_url": "https://github.com/user/project"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Tamamlama isteği gönderildi",
+  "request_id": "507f1f77bcf86cd799439012"
+}
+```
+
+### Tamamlama İsteklerini Listeleme (Admin)
+
+**Endpoint:** `GET /projects/completion-requests`
+
+**Açıklama:** Admin için tüm tamamlama isteklerini listeler.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "requests": [
+    {
+      "id": "507f1f77bcf86cd799439012",
+      "project_id": "507f1f77bcf86cd799439011",
+      "project_title": "AI Destekli E-Ticaret Platformu",
+      "owner_name": "Ahmet Yılmaz",
+      "completion_notes": "Tüm özellikler tamamlandı",
+      "demo_url": "https://demo.example.com",
+      "github_url": "https://github.com/user/project",
+      "status": "pending",
+      "requested_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+### Tamamlama İsteğini Onaylama (Admin)
+
+**Endpoint:** `POST /projects/{project_id}/completion-requests/{request_id}/approve`
+
+**Açıklama:** Admin proje tamamlama isteğini onaylar.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Proje tamamlandı olarak onaylandı"
+}
+```
+
+### Tamamlama İsteğini Reddetme (Admin)
+
+**Endpoint:** `POST /projects/{project_id}/completion-requests/{request_id}/reject`
+
+**Açıklama:** Admin proje tamamlama isteğini reddeder.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+```json
+{
+  "reason": "Eksik özellikler var, tamamlanması gerekiyor."
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Tamamlama isteği reddedildi"
+}
+```
+
+---
+
+## Magic Link Giriş Sistemi
+
+### Magic Link İsteği
+
+**Endpoint:** `POST /demo/request-login`
+
+**Açıklama:** Kullanıcı email ile giriş ister, magic link gönderilir.
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Magic link gönderildi"
+}
+```
+
+### Magic Link ile Giriş
+
+**Endpoint:** `GET /demo/verify-login?token={token}`
+
+**Açıklama:** Magic link token'ı ile giriş yapar.
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "is_developer": true,
+    "is_investor": false,
+    "linkedin_connected": false,
+    "github_connected": false,
+    "card_verified": false,
+    "created_at": "2024-01-15T10:30:00Z",
+    "last_login": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+---
+
+## Basit Endpoint'ler
+
+### Bildirim Merkezi
+
+**Endpoint:** `GET /api/notifications/`
+
+**Açıklama:** Kullanıcının bildirimlerini listeler.
+
+**Başarılı Response:**
+```json
+{
+  "message": "Bildirim Merkezi"
+}
+```
+
+### Hata Sayfaları
+
+**Endpoint:** `GET /api/notifications/404`
+
+**Açıklama:** Bulunamayan sayfa.
+
+**Response:**
+```json
+{
+  "message": "404 Not Found"
+}
+```
+
+**Endpoint:** `GET /api/notifications/403`
+
+**Açıklama:** Yetkisiz erişim.
+
+**Response:**
+```json
+{
+  "message": "403 Forbidden"
+}
+```
+
+**Endpoint:** `GET /api/notifications/maintenance`
+
+**Açıklama:** Sistem bakımda.
+
+**Response:**
+```json
+{
+  "message": "Bakım Sayfası"
+}
+```
+
+### Topluluk Endpoint'leri
+
+**Endpoint:** `GET /api/community/blog`
+
+**Açıklama:** Blog yazıları ve duyurular.
+
+**Response:**
+```json
+{
+  "message": "Blog / Duyurular"
+}
+```
+
+**Endpoint:** `GET /api/community/faq`
+
+**Açıklama:** Sıkça sorulan sorular.
+
+**Response:**
+```json
+{
+  "message": "SSS"
+}
+```
+
+**Endpoint:** `GET /api/community/social`
+
+**Açıklama:** Youtube, etkinlik bağlantıları.
+
+**Response:**
+```json
+{
+  "message": "Topluluk Sayfası"
+}
+```
+
+**Endpoint:** `GET /api/community/mentorship`
+
+**Açıklama:** Mentorluk başvuru formu.
+
+**Response:**
+```json
+{
+  "message": "Mentorluk Başvuru Sayfası"
+}
+```
+
+### Yatırım Endpoint'leri
+
+**Endpoint:** `GET /api/investments/become`
+
+**Açıklama:** Yatırımcı olma başvuru sayfası.
+
+**Response:**
+```json
+{
+  "message": "Yatırımcı Ol Sayfası"
+}
+```
+
+**Endpoint:** `GET /api/investments/explore`
+
+**Açıklama:** Yatırım yapılabilir projeleri listeler.
+
+**Response:**
+```json
+{
+  "message": "Proje Keşfet Sayfası"
+}
+```
+
+**Endpoint:** `GET /api/investments/following`
+
+**Açıklama:** Kullanıcının takip ettiği projeler.
+
+**Response:**
+```json
+{
+  "message": "Takip Ettiğim Projeler"
+}
+```
+
+**Endpoint:** `POST /api/investments/offer`
+
+**Açıklama:** Yatırım teklifi gönderme işlemi.
+
+**Response:**
+```json
+{
+  "message": "Yatırım Teklifi Gönderme Sayfası"
+}
+```
+
+### Yasal Endpoint'ler
+
+**Endpoint:** `GET /api/legal/terms`
+
+**Açıklama:** Platformun kullanım şartları.
+
+**Response:**
+```json
+{
+  "message": "Kullanım Şartları"
+}
+```
+
+**Endpoint:** `GET /api/legal/privacy`
+
+**Açıklama:** Gizlilik politikası.
+
+**Response:**
+```json
+{
+  "message": "Gizlilik Politikası"
+}
+```
+
+**Endpoint:** `GET /api/legal/cookies`
+
+**Açıklama:** Çerez politikası.
+
+**Response:**
+```json
+{
+  "message": "Çerez Politikası"
+}
+```
+
+### Ana Sayfa Endpoint'leri
+
+**Endpoint:** `GET /api/core/home`
+
+**Açıklama:** Platformun ana sayfası.
+
+**Response:**
+```json
+{
+  "message": "Ana Sayfa"
+}
+```
+
+**Endpoint:** `GET /api/core/service`
+
+**Açıklama:** Platformun sunduğu hizmetler.
+
+**Response:**
+```json
+{
+  "message": "Hizmetimiz"
+}
+```
+
+**Endpoint:** `GET /api/core/about`
+
+**Açıklama:** Platform hakkında bilgiler.
+
+**Response:**
+```json
+{
+  "message": "Hakkımızda"
+}
+```
+
+**Endpoint:** `GET /api/core/contact`
+
+**Açıklama:** İletişim bilgileri.
+
+**Response:**
+```json
+{
+  "message": "İletişim"
+}
+```
+
+---
+
+## Demo Endpoint'leri
+
+### Kişi Ekleme
+
+**Endpoint:** `GET /demo/add/`
+
+**Açıklama:** Yeni bir kişi ekler.
+
+**Parametreler:**
+- `name` (string, zorunlu): Kişinin adı
+- `age` (int, zorunlu): Kişinin yaşı
+
+**Örnek İstek:**
+```
+/demo/add/?name=Ali&age=30
+```
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "id": "665f1c2e8b3e2a1a2b3c4d5e"
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "status": "error",
+  "message": "name and age required"
+}
+```
+
+### Kişi Listesi
+
+**Endpoint:** `GET /demo/list/`
+
+**Açıklama:** Sistemde kayıtlı tüm kişileri listeler.
+
+**Örnek İstek:**
+```
+/demo/list/
+```
+
+**Başarılı Response:**
+```json
+{
+  "people": [
+    {"id": "665f1c2e8b3e2a1a2b3c4d5e", "name": "Ali", "age": 30},
+    {"id": "665f1c2e8b3e2a1a2b3c4d5f", "name": "Ayşe", "age": 25}
+  ]
+}
+```
+
+---
+
+## Email Test Sistemi
+
+### Email Ayarlarını Test Etme
+
+**Endpoint:** `POST /api/auth/test-email-settings`
+
+**Açıklama:** Email ayarlarını test eder ve test email'i gönderir.
+
+**Headers:** `Authorization: Bearer <token>` (admin gerekli)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "message": "Test email başarıyla gönderildi",
+  "email_info": {
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "username": "test@example.com",
+    "tls_enabled": true
+  }
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "status": "error",
+  "message": "Email gönderme hatası: Authentication failed"
+}
+```
+
+---
+
+## Debug Endpoint'leri
+
+### Kullanıcı Listesi (Debug)
+
+**Endpoint:** `GET /projects/debug/users`
+
+**Açıklama:** Sistemdeki tüm kullanıcıları listeler (debug amaçlı).
+
+**Headers:** `Authorization: Bearer <token>` (admin gerekli)
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "users": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "email": "user@example.com",
+      "full_name": "John Doe",
+      "user_type": ["developer"],
+      "created_at": "2024-01-15T10:30:00Z",
+      "last_login": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+---
+
 ## Görev Planlama Sistemi
 
 ### Gemini AI ile Görev Oluşturma
@@ -1239,4 +2026,164 @@ Kendi kullanıcı adı ve şifreni gir. Hata alırsan, hata mesajını paylaşab
 }
 ```
 
---- 
+---
+
+## Geliştirici Kayıt Sistemi (TC Kimlik + CV Analizi)
+
+### TC Kimlik Kartı Doğrulama
+
+**Endpoint:** `POST /api/auth/verify-id-card`
+
+**Açıklama:** TC kimlik kartının ön yüzünü yükler ve Gemini AI ile analiz eder.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:** `multipart/form-data`
+- `id_card_image`: Image file (JPEG, PNG, max 5MB)
+
+**Başarılı Response:**
+```json
+{
+  "name": "Ahmet",
+  "surname": "Yılmaz",
+  "tc": "12345678901",
+  "birth_date": "1990-01-01",
+  "issue_date": "2020-01-01",
+  "expiry_date": "2030-01-01",
+  "confidence": 0.95,
+  "message": "Kimlik kartı başarıyla doğrulandı"
+}
+```
+
+**Hatalı Response:**
+```json
+{
+  "error": "Sadece kimlik fotoğrafı (.jpg, .jpeg, .png) yükleyin."
+}
+```
+
+### CV Yükleme ve Analizi
+
+**Endpoint:** `POST /api/auth/upload-cv`
+
+**Açıklama:** CV dosyasını yükler, kimlikteki ad-soyad ile karşılaştırır ve Gemini AI ile analiz eder.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:** `multipart/form-data`
+- `cv_file`: PDF file (max 10MB)
+
+**Başarılı Response:**
+```json
+{
+  "success": true,
+  "message": "CV başarıyla doğrulandı ve analiz edildi.",
+  "cv_name": "Ahmet Yılmaz",
+  "id_name": "Ahmet Yılmaz",
+  "languages_analysis": {
+    "Python": "İleri Seviye",
+    "JavaScript": "Orta Seviye",
+    "React": "Orta Seviye",
+    "Django": "İleri Seviye"
+  },
+  "known_languages": ["Python", "JavaScript", "React", "Django"],
+  "language_levels": {
+    "İleri Seviye": ["Python", "Django"],
+    "Orta Seviye": ["JavaScript", "React"]
+  }
+}
+```
+
+**Hatalı Response (Kimlik doğrulaması yapılmamış):**
+```json
+{
+  "error": "Önce kimlik doğrulaması yapmalısınız.",
+  "debug": {
+    "identity_verified": false,
+    "verified_name": null,
+    "verified_surname": null
+  }
+}
+```
+
+**Hatalı Response (Ad-soyad eşleşmiyor):**
+```json
+{
+  "success": false,
+  "error": "CV'deki ad-soyad kimlikle eşleşmiyor. Lütfen kendi CV'nizi yükleyin.",
+  "cv_name": "Mehmet Demir",
+  "id_name": "Ahmet Yılmaz"
+}
+```
+
+### Geliştirici Kayıt Süreci
+
+**Adım 1: Email Doğrulama**
+```bash
+POST /api/auth/send-verification-code
+{
+  "email": "developer@example.com"
+}
+```
+
+**Adım 2: Email Doğrulama ve Kayıt**
+```bash
+POST /api/auth/verify-email-and-register
+{
+  "email": "developer@example.com",
+  "verification_code": "123456",
+  "full_name": "Ahmet Yılmaz",
+  "password": "securepassword123",
+  "user_type": ["developer"]
+}
+```
+
+**Adım 3: TC Kimlik Kartı Doğrulama**
+```bash
+POST /api/auth/verify-id-card
+Headers: Authorization: Bearer <token>
+Body: multipart/form-data
+- id_card_image: [TC kimlik kartı ön yüzü]
+```
+
+**Adım 4: CV Yükleme ve Analizi**
+```bash
+POST /api/auth/upload-cv
+Headers: Authorization: Bearer <token>
+Body: multipart/form-data
+- cv_file: [CV PDF dosyası]
+```
+
+### Geliştirici Profil Bilgileri
+
+**Endpoint:** `GET /api/auth/me`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Başarılı Response:**
+```json
+{
+  "status": "ok",
+  "user": {
+    "id": "507f1f77bcf86cd799439011",
+    "email": "developer@example.com",
+    "full_name": "Ahmet Yılmaz",
+    "user_type": ["developer"],
+    "identity_verified": true,
+    "verified_name": "Ahmet",
+    "verified_surname": "Yılmaz",
+    "tc_verified": "12345678901",
+    "cv_verified": true,
+    "cv_name_detected": "Ahmet Yılmaz",
+    "known_languages": ["Python", "JavaScript", "React", "Django"],
+    "language_levels": {
+      "İleri Seviye": ["Python", "Django"],
+      "Orta Seviye": ["JavaScript", "React"]
+    },
+    "reliability_score": 85,
+    "avatar": "/media/avatars/avatar_123.jpg"
+  }
+}
+```
+
+---
