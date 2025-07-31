@@ -7,7 +7,6 @@ urlpatterns = [
     path('verify-email', verify_email),
     path('reset-password', reset_password),
     path('me', my_profile),
-    path('<str:id>', user_profile),
     path('me/edit', edit_profile),
     path('roles', edit_roles),
     path('reset-password/', reset_password_request),  
@@ -27,4 +26,6 @@ urlpatterns = [
     path('update-profile', update_profile),
     path('upload-avatar', upload_avatar),
     path('delete-account', delete_account),
+    # Kullanıcı profili - en sona taşındı çünkü genel pattern
+    path('<str:user_id>', user_profile),
 ]
