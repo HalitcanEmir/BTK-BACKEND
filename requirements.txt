@@ -11,4 +11,4 @@ PyJWT==2.8.0
 beautifulsoup4==4.12.2
 requests==2.31.0
 dnspython==2.4.2
-Pillow==9.4.0 
+Pillow==9.2.0 
