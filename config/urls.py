@@ -26,4 +26,5 @@ urlpatterns = [
     path('api/auth/verify-login', verify_login),
     path('api/auth/', include('users.urls')),
     path('ideas/', include('ideas.urls')),  # ideas app endpointlerini ekle
+    path('projects/', include('projects.urls')),  # projects app endpointlerini ekle
 ]

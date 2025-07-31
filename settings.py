@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,10 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jrsjpqaab()c*+r$#%2ae5v90b8p#hyuez$jhaym%aqdk-v(ij'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-jrsjpqaab()c*+r$#%2ae5v90b8p#hyuez$jhaym%aqdk-v(ij')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = []
 
@@ -80,10 +85,17 @@ WSGI_APPLICATION = 'btkproject.wsgi.application'
 #     }
 # }
 
-# MongoDB bağlantısı için mongoengine ayarları (Atlas kullanımı)
+
+# MongoDB bağlantısı için mongoengine ayarları
 from mongoengine import connect
-MONGODB_URI = 'mongodb+srv://<username>:<password>@<cluster-url>/<dbname>?retryWrites=true&w=majority'
-connect(host=MONGODB_URI)
+MONGODB_URI = os.environ.get('MONGODB_URI')
+if MONGODB_URI:
+    connect(host=MONGODB_URI)
+else:
+    MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btkdb')
+    MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
+    MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
+    connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
 
 
 # Password validation

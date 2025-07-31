@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,10 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jrsjpqaab()c*+r$#%2ae5v90b8p#hyuez$jhaym%aqdk-v(ij'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-jrsjpqaab()c*+r$#%2ae5v90b8p#hyuez$jhaym%aqdk-v(ij')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = []
 
@@ -82,9 +87,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # MongoDB bağlantısı için mongoengine ayarları
 from mongoengine import connect
-MONGODB_NAME = 'btkdb'
-MONGODB_HOST = 'mongodb+srv://halitcanemir06:6WSY86zmwldt9Nsv@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0'
-connect(db=MONGODB_NAME, host=MONGODB_HOST)
+MONGODB_NAME = os.environ.get('MONGODB_NAME', 'gelisiyor')
+MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
+MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
+connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
+
+# Gemini AI API Key
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q')
+
+# Email Settings
+SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+SMTP_USERNAME = os.environ.get('SMTP_USERNAME', 'madeinyouutr@gmail.com')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', 'xaus dyhb qqyb ikij')
+
+# Örnek:
+# SMTP_USERNAME = 'btkbackend@gmail.com'
+# SMTP_PASSWORD = 'abcd efgh ijkl mnop'
+
+# JWT Settings
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-jwt-secret-key-here')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 
 
 # Password validation
@@ -127,8 +150,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# JWT ayarları
-JWT_SECRET_KEY = SECRET_KEY  # Güvenlik için production'da farklı bir anahtar kullanın
-JWT_ALGORITHM = 'HS256'
-JWT_MAGICLINK_EXP_MINUTES = 15  # Magic link süresi (dakika)

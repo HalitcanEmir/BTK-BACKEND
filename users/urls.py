@@ -12,5 +12,4 @@ urlpatterns = [
     path('roles', edit_roles),
     path('reset-password/', reset_password_request),  
     path('reset-password-confirm/<str:token>/', reset_password_confirm),  
-    
 ]
