@@ -6,8 +6,48 @@ from django.utils import timezone
 from .utils import create_magiclink_token, verify_magiclink_token
 from .models import User
 import json
+from mongoengine import connect
+from django.conf import settings
 
 # Create your views here.
+
+# MongoDB Atlas bağlantı testi
+@csrf_exempt
+def test_mongodb_connection(request):
+    """MongoDB Atlas bağlantısını test eder"""
+    try:
+        # Test için basit bir kişi oluştur
+        test_person = Person(name="Test User", age=25)
+        test_person.save()
+        
+        # Kaydedilen kişiyi bul
+        found_person = Person.objects(name="Test User").first()
+        
+        if found_person:
+            # Test kişisini sil
+            found_person.delete()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'MongoDB Atlas bağlantısı başarılı!',
+                'connection_info': {
+                    'database': 'btk_backend',
+                    'host': settings.MONGODB_HOST if hasattr(settings, 'MONGODB_HOST') else 'Atlas',
+                    'test_person_id': str(found_person.id)
+                }
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Kişi kaydedildi ama bulunamadı'
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'MongoDB Atlas bağlantı hatası: {str(e)}',
+            'error_details': str(e)
+        })
 
 # Yeni bir kişi ekler
 # Örnek: /add/?name=Ali&age=30

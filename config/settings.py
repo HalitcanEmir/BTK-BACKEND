@@ -30,7 +30,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-jrsjpqaab()c*+r$#%2ae
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # Render.com için tüm hostlara izin ver
 
 
 # Application definition
@@ -87,10 +87,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # MongoDB bağlantısı için mongoengine ayarları
 from mongoengine import connect
-MONGODB_NAME = os.environ.get('MONGODB_NAME', 'gelisiyor')
 MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
-MONGODB_PORT = int(os.environ.get('MONGODB_PORT', 27017))
-connect(db=MONGODB_NAME, host=MONGODB_HOST, port=MONGODB_PORT)
+MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
+
+# Render.com için MongoDB Atlas bağlantısı
+if MONGODB_HOST != 'localhost':
+    # Atlas connection string kullan
+    connect(host=MONGODB_HOST)
+else:
+    # Local MongoDB kullan
+    connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017)
 
 # Gemini AI API Key
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q')

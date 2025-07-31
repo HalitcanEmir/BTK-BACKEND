@@ -16,12 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from demo.views import add_person, list_people, request_login, verify_login
+from demo.views import add_person, list_people, request_login, verify_login, test_mongodb_connection
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('add/', add_person),
     path('list/', list_people),
+    path('test-mongodb/', test_mongodb_connection),
     path('api/auth/request-login', request_login),
     path('api/auth/verify-login', verify_login),
     path('api/auth/', include('users.urls')),

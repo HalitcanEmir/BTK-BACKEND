@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: btk-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: MONGODB_NAME
+        value: btk_backend
+      - key: MONGODB_HOST
+        value: mongodb+srv://halitcanemir06:<1591235He>@cluster0.olbrlzd.mongodb.net/btk_backend?retryWrites=true&w=majority&appName=Cluster0
+      - key: GEMINI_API_KEY
+        value: AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        value: your-email@gmail.com
+      - key: SMTP_PASSWORD
+        value: your-app-password 

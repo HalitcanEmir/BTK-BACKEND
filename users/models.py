@@ -4,6 +4,7 @@ import datetime
 
 # Create your models here.
 
+class User(Document):
     email = StringField(required=True, unique=True)  # Kullanıcı e-posta adresi
     password_hash = StringField(required=True)  # Hashlenmiş şifre
     full_name = StringField()  # Kullanıcının tam adı
@@ -14,3 +15,23 @@ import datetime
     created_at = DateTimeField(default=datetime.datetime.utcnow)  # Kayıt tarihi
     reset_token = StringField()  # Şifre sıfırlama token'ı
     reset_token_expiry = DateTimeField()  # Token'ın geçerlilik süresi
+
+class EmailVerification(Document):
+    email = StringField(required=True)
+    verification_code = StringField(required=True)
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    expires_at = DateTimeField(required=True)
+    is_used = BooleanField(default=False)
+
+class PasswordReset(Document):
+    email = StringField(required=True)
+    reset_code = StringField(required=True)
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    expires_at = DateTimeField(required=True)
+    is_used = BooleanField(default=False)
+
+class FriendRequest(Document):
+    from_user = ReferenceField(User, required=True)
+    to_user = ReferenceField(User, required=True)
+    status = StringField(choices=["pending", "accepted", "rejected"], default="pending")
+    created_at = DateTimeField(default=datetime.datetime.utcnow)

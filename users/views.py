@@ -363,7 +363,6 @@ def edit_profile(request):
 def edit_roles(request):
     return JsonResponse({"message": "Rol Ayarları"})
 
-<<<<<<< HEAD
 @csrf_exempt
 def reset_password_confirm(request, token):
     if request.method != "POST":
@@ -381,7 +380,7 @@ def reset_password_confirm(request, token):
     user.reset_token_expiry = None
     user.save()
     return JsonResponse({'status': 'ok', 'message': 'Şifreniz başarıyla değiştirildi.'})
-=======
+
 # KİMLİK DOĞRULAMA ENDPOINT'LERİ
 
 # POST /api/auth/verify-identity
@@ -1748,4 +1747,3 @@ def test_email_settings(request):
             "settings": settings_info,
             "test_email": test_email
         }, status=500)
->>>>>>> e5dfb1b8b9c2be0a079eeec86b6f34beb7b6a306
