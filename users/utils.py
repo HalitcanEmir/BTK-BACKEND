@@ -141,6 +141,50 @@ def analyze_id_card(image_data):
             'message': f'AI analizi sırasında hata: {str(e)}',
             'error': str(e)
         }
+        
+        # JSON parse et
+        try:
+            # Gemini'nin yanıtını temizle (```json ve ``` kaldır)
+            clean_response = response.text.strip()
+            if clean_response.startswith('```json'):
+                clean_response = clean_response[7:]  # ```json kaldır
+            if clean_response.endswith('```'):
+                clean_response = clean_response[:-3]  # ``` kaldır
+            
+            result = json.loads(clean_response.strip())
+            print(f"✅ JSON parse başarılı: {result}")
+            
+            # AI'nın döndürdüğü status'u kontrol et
+            if result.get('status') == 'success':
+                return {
+                    'status': 'success',
+                    'name': result.get('name'),
+                    'surname': result.get('surname')
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': result.get('message', 'Kimlik analizi başarısız'),
+                    'raw_response': response.text
+                }
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parse hatası: {e}")
+            print(f"📄 Raw response: {response.text}")
+            print(f"🧹 Cleaned response: {clean_response}")
+            return {
+                'status': 'error',
+                'message': 'AI yanıtı JSON formatında değil',
+                'raw_response': response.text,
+                'error': str(e)
+            }
+        
+    except Exception as e:
+        print(f"❌ AI analizi hatası: {e}")
+        return {
+            'status': 'error',
+            'message': f'AI analizi sırasında hata: {str(e)}',
+            'error': str(e)
+        }
 
 def scrape_linkedin_profile(linkedin_url):
     """
