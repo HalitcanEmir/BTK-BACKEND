@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn config.wsgi:application
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -25,6 +25,10 @@ services:
       - key: SMTP_PORT
         value: 587
       - key: SMTP_USERNAME
-        value: your-email@gmail.com
+        value: madeinyouutr@gmail.com
       - key: SMTP_PASSWORD
-        value: your-app-password 
+        value: xaus dyhb qqyb ikij
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256 
