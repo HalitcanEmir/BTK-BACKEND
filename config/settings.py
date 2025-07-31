@@ -47,7 +47,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Static files için
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     # 'django.middleware.csrf.CsrfViewMiddleware',  # CSRF koruması test için devre dışı
@@ -87,18 +86,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # }
 
 # MongoDB bağlantısı için mongoengine ayarları
-from mongoengine import connect
 MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
 MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
 
-# Render.com için MongoDB Atlas bağlantısı
+# MongoDB bağlantısı - basit versiyon
 try:
+    from mongoengine import connect
     if MONGODB_HOST != 'localhost':
-        # Atlas connection string kullan
         connect(host=MONGODB_HOST)
+        print("MongoDB Atlas bağlantısı başarılı")
     else:
-        # Local MongoDB kullan
         connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017)
+        print("Local MongoDB bağlantısı başarılı")
 except Exception as e:
     print(f"MongoDB bağlantı hatası: {e}")
     # Hata durumunda uygulama çalışmaya devam etsin
@@ -157,9 +156,6 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# WhiteNoise configuration
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

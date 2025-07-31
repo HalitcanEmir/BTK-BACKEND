@@ -10,5 +10,4 @@ bcrypt==4.1.2
 PyJWT==2.8.0
 beautifulsoup4==4.12.2
 requests==2.31.0
-whitenoise==6.6.0
 dnspython==2.4.2 

@@ -3,8 +3,8 @@ services:
     name: btk-backend
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT config.wsgi:application
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

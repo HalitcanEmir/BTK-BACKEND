@@ -15,14 +15,12 @@ from .models import ProjectAnalysis
 
 # Create your views here.
 
-# Fikirler Sayfası
+# Fikirler Sayfası - Herkes erişebilir
 # GET /ideas
 # Açıklama: Onaylanmış fikirleri listeler, filtreleme, arama, sıralama ve pagination destekler
 @csrf_exempt
 def ideas_list(request):
-    user = get_user_from_jwt(request)
-    if not user:
-        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
+    # JWT kontrolü kaldırıldı - herkes erişebilir
     # Query parametreleri
     page = int(request.GET.get('page', 1))
     limit = int(request.GET.get('limit', 10))
@@ -81,14 +79,12 @@ def ideas_list(request):
         'ideas': data
     })
 
-# Fikir Detay Sayfası
+# Fikir Detay Sayfası - Herkes erişebilir
 # GET /ideas/<id>
 # Açıklama: Belirli bir fikrin detayını getirir
 @csrf_exempt
 def idea_detail(request, id):
-    user = get_user_from_jwt(request)
-    if not user:
-        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız (JWT gerekli)'}, status=401)
+    # JWT kontrolü kaldırıldı - herkes erişebilir
     try:
         obj_id = ObjectId(id)
     except Exception:
@@ -148,7 +144,26 @@ def get_user_from_jwt(request):
         return None
 
 def is_admin(user):
-    return user and ('admin' in getattr(user, 'user_type', []) or 'admin' in getattr(user, 'roles', []))
+    if not user:
+        return False
+    # Debug için kullanıcı bilgilerini yazdır
+    print(f"User: {user.email}")
+    print(f"User type: {getattr(user, 'user_type', [])}")
+    print(f"Roles: {getattr(user, 'roles', [])}")
+    
+    # Admin kontrolü - daha esnek
+    user_type = getattr(user, 'user_type', [])
+    roles = getattr(user, 'roles', [])
+    
+    # Admin kelimesi içeren herhangi bir rol
+    if 'admin' in user_type or 'admin' in roles:
+        return True
+    
+    # Email'e göre admin kontrolü (test için)
+    if user.email in ['admin@example.com', 'madeinyouutr@gmail.com']:
+        return True
+    
+    return False
 
 from bson import ObjectId
 
