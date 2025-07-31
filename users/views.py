@@ -1,23 +1,21 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.http import JsonResponse
-import json
-from .models import User, EmailVerification, PasswordReset
-from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match, generate_verification_code, send_verification_email, send_welcome_email, send_password_reset_email
-import jwt
 from django.conf import settings
-from .forms import IDCardForm, CVUploadForm
-from .utils import send_image_to_gemini, extract_text_from_pdf, detect_name_from_cv, compare_names, analyze_cv_with_gemini
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
+from datetime import datetime, timedelta
+from mongoengine.errors import DoesNotExist
+from django.contrib.auth.decorators import login_required
+import jwt
+import json
 import base64
 import os
-from mongoengine.errors import DoesNotExist
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from .models import EmailVerification
-from datetime import datetime, timedelta
 import re
-from .models import FriendRequest
+from .models import User, EmailVerification, PasswordReset, FriendRequest
+from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match, generate_verification_code, send_verification_email, send_welcome_email, send_password_reset_email, send_image_to_gemini, extract_text_from_pdf, detect_name_from_cv, compare_names, analyze_cv_with_gemini
+from .forms import IDCardForm, CVUploadForm
 
 # Create your views here.
 
@@ -60,32 +58,20 @@ def get_user_from_jwt(request):
 def get_user_from_token(request):
     """JWT token'dan kullanıcıyı al"""
     auth_header = request.headers.get('Authorization')
-    print(f"Auth header: {auth_header}")
     if not auth_header or not auth_header.startswith('Bearer '):
-        print("Auth header yok veya Bearer ile başlamıyor")
         return None
-    
     token = auth_header.split(' ')[1]
-    print(f"Token: {token[:20]}...")  # İlk 20 karakteri göster
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-        print(f"Payload: {payload}")
-        email = payload.get('email')  # user_id yerine email kullan
-        print(f"Email: {email}")
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        email = payload.get('email')
         if email:
-            user = User.objects.get(email=email)  # id yerine email ile ara
-            print(f"User found: {user.email}")
+            user = User.objects(email=email).first()
             return user
-        else:
-            print("Email bulunamadı")
-    except jwt.InvalidTokenError as e:
-        print(f"JWT decode hatası: {e}")
+    except jwt.InvalidTokenError:
         return None
-    except DoesNotExist as e:
-        print(f"User bulunamadı: {e}")
+    except DoesNotExist:
         return None
-    except Exception as e:
-        print(f"Beklenmeyen hata: {e}")
+    except Exception:
         return None
     return None
 
@@ -205,6 +191,32 @@ def register(request):
 # E-posta Doğrulama
 # GET /api/auth/verify-email
 # Açıklama: E-posta doğrulama endpointi
+
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def reset_password_request(request):
+    if request.method != "POST":
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+    try:
+        data = json.loads(request.body)
+        email = data.get("email")
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
+    user = User.objects(email=email).first()
+    if user:
+        token = get_random_string(64)
+        user.reset_token = token
+        user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+        user.save()
+        reset_link = f"{settings.SITE_URL}/api/auth/reset-password-confirm/{token}/"
+        send_mail(
+            "Şifre Sıfırlama",
+            f"Şifrenizi sıfırlamak için bu linke tıklayın: {reset_link}",
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+        )
+    return JsonResponse({'status': 'ok', 'message': 'Eğer e-posta kayıtlıysa, sıfırlama linki gönderildi.'})
 def verify_email(request):
     return JsonResponse({"message": "E-posta Doğrulama"})
 
@@ -351,6 +363,25 @@ def edit_profile(request):
 def edit_roles(request):
     return JsonResponse({"message": "Rol Ayarları"})
 
+<<<<<<< HEAD
+@csrf_exempt
+def reset_password_confirm(request, token):
+    if request.method != "POST":
+        return JsonResponse({'status': 'error', 'message': 'POST olmalı'})
+    try:
+        data = json.loads(request.body)
+        new_password = data.get("password")
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
+    user = User.objects(reset_token=token, reset_token_expiry__gte=datetime.utcnow()).first()
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Token geçersiz veya süresi dolmuş'})
+    user.password_hash = hash_password(new_password)
+    user.reset_token = None
+    user.reset_token_expiry = None
+    user.save()
+    return JsonResponse({'status': 'ok', 'message': 'Şifreniz başarıyla değiştirildi.'})
+=======
 # KİMLİK DOĞRULAMA ENDPOINT'LERİ
 
 # POST /api/auth/verify-identity
@@ -1717,3 +1748,4 @@ def test_email_settings(request):
             "settings": settings_info,
             "test_email": test_email
         }, status=500)
+>>>>>>> e5dfb1b8b9c2be0a079eeec86b6f34beb7b6a306
