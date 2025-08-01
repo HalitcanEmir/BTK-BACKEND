@@ -1,4 +1,5 @@
 from django.urls import path
+
 from .views import (
     projects_list, project_detail, jobs_list, job_detail, project_team,
     approve_candidate, reject_candidate, project_plan, project_tasks,
