@@ -89,13 +89,22 @@ WSGI_APPLICATION = 'config.wsgi.application'
 MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
 MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
 
-# MongoDB bağlantısı - basit versiyon
+# Debug için environment variable'ları yazdır
+print(f"Environment MONGODB_HOST: {os.environ.get('MONGODB_HOST')}")
+print(f"Environment MONGODB_NAME: {os.environ.get('MONGODB_NAME')}")
+
+# MongoDB bağlantısı - düzeltilmiş versiyon
 try:
     from mongoengine import connect
-    if MONGODB_HOST != 'localhost':
+    print(f"MONGODB_HOST: {MONGODB_HOST}")
+    print(f"MONGODB_NAME: {MONGODB_NAME}")
+    
+    if MONGODB_HOST and MONGODB_HOST != 'localhost' and 'mongodb+srv://' in MONGODB_HOST:
+        # Atlas bağlantısı
         connect(host=MONGODB_HOST)
         print("MongoDB Atlas bağlantısı başarılı")
     else:
+        # Local bağlantı
         connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017)
         print("Local MongoDB bağlantısı başarılı")
 except Exception as e:
