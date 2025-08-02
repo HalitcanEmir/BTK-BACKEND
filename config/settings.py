@@ -93,22 +93,32 @@ MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
 print(f"Environment MONGODB_HOST: {os.environ.get('MONGODB_HOST')}")
 print(f"Environment MONGODB_NAME: {os.environ.get('MONGODB_NAME')}")
 
-# MongoDB bağlantısı - düzeltilmiş versiyon
+# MongoDB bağlantısı - güvenli versiyon
 try:
     from mongoengine import connect
-    print(f"MONGODB_HOST: {MONGODB_HOST}")
-    print(f"MONGODB_NAME: {MONGODB_NAME}")
     
-    if MONGODB_HOST and MONGODB_HOST != 'localhost' and 'mongodb+srv://' in MONGODB_HOST:
-        # Atlas bağlantısı
-        connect(host=MONGODB_HOST)
+    # Environment variable'ları tekrar kontrol et
+    atlas_host = os.environ.get('MONGODB_HOST')
+    atlas_name = os.environ.get('MONGODB_NAME')
+    
+    print(f"Raw MONGODB_HOST from env: {atlas_host}")
+    print(f"Raw MONGODB_NAME from env: {atlas_name}")
+    print(f"Processed MONGODB_HOST: {MONGODB_HOST}")
+    print(f"Processed MONGODB_NAME: {MONGODB_NAME}")
+    
+    # Atlas bağlantısını zorla kullan
+    if atlas_host and 'mongodb+srv://' in atlas_host:
+        print("Atlas bağlantısı kuruluyor...")
+        # Timeout ayarları ile bağlantı
+        connect(host=atlas_host, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
         print("MongoDB Atlas bağlantısı başarılı")
     else:
-        # Local bağlantı
-        connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017)
+        print("Atlas bağlantısı bulunamadı, localhost kullanılıyor")
+        connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
         print("Local MongoDB bağlantısı başarılı")
 except Exception as e:
     print(f"MongoDB bağlantı hatası: {e}")
+    print(f"Hata detayı: {type(e).__name__}")
     # Hata durumunda uygulama çalışmaya devam etsin
 
 # Gemini AI API Key
