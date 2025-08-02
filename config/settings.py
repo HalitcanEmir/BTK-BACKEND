@@ -93,31 +93,22 @@ MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
 print(f"Environment MONGODB_HOST: {os.environ.get('MONGODB_HOST')}")
 print(f"Environment MONGODB_NAME: {os.environ.get('MONGODB_NAME')}")
 
-# MongoDB bağlantısı - güvenli versiyon
+# MongoDB Atlas bağlantısı - Zorla Atlas'a bağlan
 try:
     from mongoengine import connect
     
-    # Environment variable'ları tekrar kontrol et
-    atlas_host = os.environ.get('MONGODB_HOST')
-    atlas_name = os.environ.get('MONGODB_NAME')
+    # Atlas connection string'ini environment variable'dan al
+    atlas_connection_string = os.environ.get('MONGODB_HOST', "mongodb+srv://halitcanemir06:1591235He@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0")
     
-    print(f"Raw MONGODB_HOST from env: {atlas_host}")
-    print(f"Raw MONGODB_NAME from env: {atlas_name}")
-    print(f"Processed MONGODB_HOST: {MONGODB_HOST}")
-    print(f"Processed MONGODB_NAME: {MONGODB_NAME}")
+    print(f"Atlas connection string: {atlas_connection_string[:50]}...")
+    print("MongoDB Atlas'a bağlanıyor...")
     
-    # Atlas bağlantısını zorla kullan
-    if atlas_host and 'mongodb+srv://' in atlas_host:
-        print("Atlas bağlantısı kuruluyor...")
-        # Timeout ayarları ile bağlantı
-        connect(host=atlas_host, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
-        print("MongoDB Atlas bağlantısı başarılı")
-    else:
-        print("Atlas bağlantısı bulunamadı, localhost kullanılıyor")
-        connect(db=MONGODB_NAME, host=MONGODB_HOST, port=27017, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
-        print("Local MongoDB bağlantısı başarılı")
+    # Atlas'a doğrudan bağlan
+    connect(host=atlas_connection_string, serverSelectionTimeoutMS=10000, connectTimeoutMS=10000)
+    print("✅ MongoDB Atlas bağlantısı başarılı!")
+    
 except Exception as e:
-    print(f"MongoDB bağlantı hatası: {e}")
+    print(f"❌ MongoDB Atlas bağlantı hatası: {e}")
     print(f"Hata detayı: {type(e).__name__}")
     # Hata durumunda uygulama çalışmaya devam etsin
 

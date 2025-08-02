@@ -15,9 +15,9 @@ services:
       - key: DEBUG
         value: "False"
       - key: MONGODB_NAME
-        value: btk_backend
+        value: btkdb
       - key: MONGODB_HOST
-        value: mongodb+srv://halitcanemir06:<1591235He>@cluster0.eqsstlg.mongodb.net/btk_backend?retryWrites=true&w=majority&appName=Cluster0
+        value: mongodb+srv://halitcanemir06:1591235He@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0
       - key: GEMINI_API_KEY
         value: AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q
       - key: SMTP_SERVER
