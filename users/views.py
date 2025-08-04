@@ -1115,16 +1115,18 @@ def upload_cv_view(request):
             # Debug: Kullanıcı durumunu kontrol et
             print(f"User ID: {user.id}")
             print(f"User email: {user.email}")
-            print(f"Identity verified: {getattr(user, 'identity_verified', False)}")
-            print(f"Verified name: {getattr(user, 'verified_name', None)}")
-            print(f"Verified surname: {getattr(user, 'verified_surname', None)}")
             print(f"User type: {getattr(user, 'user_type', [])}")
             
-            # Kimlik doğrulaması geçmiş mi kontrol et
+            # Güvenli şekilde kimlik bilgilerini al
             identity_verified = getattr(user, 'identity_verified', False)
             verified_name = getattr(user, 'verified_name', None)
             verified_surname = getattr(user, 'verified_surname', None)
             
+            print(f"Identity verified: {identity_verified}")
+            print(f"Verified name: {verified_name}")
+            print(f"Verified surname: {verified_surname}")
+            
+            # Kimlik doğrulaması geçmiş mi kontrol et
             if not identity_verified or not verified_name or not verified_surname:
                 return JsonResponse({
                     'error': 'Önce kimlik doğrulaması yapmalısınız.',
