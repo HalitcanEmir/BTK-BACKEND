@@ -1747,3 +1747,69 @@ def test_email_settings(request):
             "settings": settings_info,
             "test_email": test_email
         }, status=500)
+
+def test_atlas_connection(request):
+    """MongoDB Atlas bağlantısını test eder"""
+    try:
+        # Kullanıcı sayısını kontrol et
+        user_count = User.objects.count()
+        
+        # Test kullanıcısı oluştur
+        test_user = User(
+            email="test@atlas.com",
+            full_name="Test Atlas User",
+            password_hash="test_hash_123",
+            user_type=["developer"]
+        )
+        test_user.save()
+        
+        # Kullanıcıyı bul ve sil
+        found_user = User.objects(email="test@atlas.com").first()
+        if found_user:
+            found_user.delete()
+        
+        return JsonResponse({
+            "status": "success",
+            "message": "MongoDB Atlas bağlantısı başarılı!",
+            "user_count": user_count,
+            "test_operation": "completed"
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": f"Atlas bağlantı hatası: {str(e)}"
+        }, status=500)
+
+def list_users(request):
+    """Veritabanındaki tüm kullanıcıları listeler"""
+    try:
+        # Tüm kullanıcıları al
+        users = User.objects.all()
+        
+        user_list = []
+        for user in users:
+            user_data = {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "user_type": user.user_type,
+                "github_verified": user.github_verified,
+                "linkedin_verified": user.linkedin_verified,
+                "can_invest": user.can_invest,
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            }
+            user_list.append(user_data)
+        
+        return JsonResponse({
+            "status": "success",
+            "message": f"Toplam {len(user_list)} kullanıcı bulundu",
+            "users": user_list,
+            "total_count": len(user_list)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": f"Kullanıcı listesi alınırken hata: {str(e)}"
+        }, status=500)

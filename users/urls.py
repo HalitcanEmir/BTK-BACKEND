@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import login, register, verify_email, reset_password, my_profile, user_profile, edit_profile, edit_roles, reset_password_request, reset_password_confirm, verify_id_view, upload_cv_view, send_verification_code, verify_email_and_register, resend_verification_code, send_password_reset_code, verify_reset_code_and_change_password, resend_password_reset_code, update_profile, upload_avatar, delete_account
+from .views import login, register, verify_email, reset_password, my_profile, user_profile, edit_profile, edit_roles, reset_password_request, reset_password_confirm, verify_id_view, upload_cv_view, send_verification_code, verify_email_and_register, resend_verification_code, send_password_reset_code, verify_reset_code_and_change_password, resend_password_reset_code, update_profile, upload_avatar, delete_account, test_atlas_connection, list_users
 
 urlpatterns = [
     path('register', register),
@@ -26,6 +26,10 @@ urlpatterns = [
     path('update-profile', update_profile),
     path('upload-avatar', upload_avatar),
     path('delete-account', delete_account),
+    # Atlas bağlantı test endpoint'i
+    path('test-atlas', test_atlas_connection),
+    # Kullanıcı listesi endpoint'i
+    path('list', list_users),
     # Kullanıcı profili - en sona taşındı çünkü genel pattern
     path('<str:user_id>', user_profile),
 ]
