@@ -1094,102 +1094,138 @@ def verify_id_view(request):
             user.identity_verified = True
             user.save()
         
-        # Sadece Gemini'nin cevabını döndür
-        return JsonResponse(data)
+        # Gemini'nin cevabını döndür
+        response_data = data.copy()
+        response_data['identity_verified'] = True
+        response_data['message'] = 'Kimlik doğrulaması başarılı! Şimdi CV yükleyebilirsiniz.'
+        response_data['next_step'] = 'upload_cv'
+        
+        return JsonResponse(response_data)
     return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
 
 @csrf_exempt
 def upload_cv_view(request):
     if request.method == 'POST':
-        # JWT authentication
-        user = get_user_from_token(request)
-        if not user:
-            return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
-        
-        # Debug: Kullanıcı durumunu kontrol et
-        print(f"User ID: {user.id}")
-        print(f"Identity verified: {user.identity_verified}")
-        print(f"Verified name: {user.verified_name}")
-        print(f"Verified surname: {user.verified_surname}")
-        
-        # Kimlik doğrulaması geçmiş mi kontrol et
-        if not user.identity_verified or not user.verified_name or not user.verified_surname:
-            return JsonResponse({
-                'error': 'Önce kimlik doğrulaması yapmalısınız.',
-                'debug': {
-                    'identity_verified': user.identity_verified,
-                    'verified_name': user.verified_name,
-                    'verified_surname': user.verified_surname
-                }
-            }, status=400)
-        
-        form = CVUploadForm(request.POST, request.FILES)
-        if not form.is_valid():
-            return JsonResponse({'error': 'Geçersiz dosya formatı veya boyut.'}, status=400)
-        
-        cv_file = form.cleaned_data['cv_file']
-        
-        # CV'den metin çıkar
-        cv_text = extract_text_from_pdf(cv_file)
-        if not cv_text:
-            return JsonResponse({'error': 'CV dosyasından metin çıkarılamadı.'}, status=400)
-        
-        # CV'den ad-soyad tespit et
-        cv_name = detect_name_from_cv(cv_text)
-        if not cv_name:
-            return JsonResponse({'error': 'CV\'den ad-soyad tespit edilemedi.'}, status=400)
-        
-        # Kimlikteki ad-soyad ile karşılaştır
-        id_full_name = f"{user.verified_name} {user.verified_surname}"
-        
-        if compare_names(cv_name, id_full_name):
-            # Eşleşiyor - CV'yi kaydet ve analiz et
-            user.cv_file = cv_file.name  # Dosya adını kaydet, dosya objesini değil
-            user.cv_verified = True
-            user.cv_name_detected = cv_name
-            user.save()
+        try:
+            # JWT authentication
+            user = get_user_from_token(request)
+            if not user:
+                return JsonResponse({'error': 'Geçersiz token veya kullanıcı bulunamadı.'}, status=401)
             
-            # CV'yi Gemini ile analiz et
-            cv_analysis = analyze_cv_with_gemini(cv_text)
+            # Debug: Kullanıcı durumunu kontrol et
+            print(f"User ID: {user.id}")
+            print(f"User email: {user.email}")
+            print(f"Identity verified: {getattr(user, 'identity_verified', False)}")
+            print(f"Verified name: {getattr(user, 'verified_name', None)}")
+            print(f"Verified surname: {getattr(user, 'verified_surname', None)}")
+            print(f"User type: {getattr(user, 'user_type', [])}")
             
-            if 'languages' in cv_analysis:
-                # Programlama dillerini kullanıcıya kaydet
-                user.languages_known = json.dumps(cv_analysis['languages'], ensure_ascii=False)
-                
-                # Dilleri ve seviyeleri ayrı ayrı kaydet
-                if 'languages_list' in cv_analysis:
-                    user.known_languages = cv_analysis['languages_list']
-                
-                if 'levels_summary' in cv_analysis:
-                    user.language_levels = json.dumps(cv_analysis['levels_summary'], ensure_ascii=False)
-                
+            # Kimlik doğrulaması geçmiş mi kontrol et
+            identity_verified = getattr(user, 'identity_verified', False)
+            verified_name = getattr(user, 'verified_name', None)
+            verified_surname = getattr(user, 'verified_surname', None)
+            
+            if not identity_verified or not verified_name or not verified_surname:
+                return JsonResponse({
+                    'error': 'Önce kimlik doğrulaması yapmalısınız.',
+                    'debug': {
+                        'identity_verified': identity_verified,
+                        'verified_name': verified_name,
+                        'verified_surname': verified_surname
+                    }
+                }, status=400)
+            
+            # Form kontrolü
+            form = CVUploadForm(request.POST, request.FILES)
+            if not form.is_valid():
+                return JsonResponse({'error': 'Geçersiz dosya formatı veya boyut.'}, status=400)
+            
+            cv_file = form.cleaned_data['cv_file']
+            print(f"📁 CV dosyası: {cv_file.name}, boyut: {cv_file.size}")
+            
+            # CV'den metin çıkar
+            cv_text = extract_text_from_pdf(cv_file)
+            if not cv_text:
+                return JsonResponse({'error': 'CV dosyasından metin çıkarılamadı.'}, status=400)
+            
+            # CV'den ad-soyad tespit et
+            cv_name = detect_name_from_cv(cv_text)
+            if not cv_name:
+                return JsonResponse({'error': 'CV\'den ad-soyad tespit edilemedi.'}, status=400)
+            
+            # Kimlikteki ad-soyad ile karşılaştır
+            id_full_name = f"{verified_name} {verified_surname}"
+            
+            if compare_names(cv_name, id_full_name):
+                # Eşleşiyor - CV'yi kaydet ve analiz et
+                user.cv_file = cv_file.name
+                user.cv_verified = True
+                user.cv_name_detected = cv_name
                 user.save()
                 
-                return JsonResponse({
-                    'success': True,
-                    'message': 'CV başarıyla doğrulandı ve analiz edildi.',
-                    'cv_name': cv_name,
-                    'id_name': id_full_name,
-                    'languages_analysis': cv_analysis['languages'],
-                    'known_languages': cv_analysis.get('languages_list', []),
-                    'language_levels': cv_analysis.get('levels_summary', {})
-                })
+                # CV'yi Gemini ile analiz et
+                print(f"🤖 CV Gemini'ye gönderiliyor...")
+                cv_analysis = analyze_cv_with_gemini(cv_text)
+                print(f"📊 Gemini analiz sonucu: {cv_analysis}")
+                
+                if 'languages' in cv_analysis:
+                    # Programlama dillerini kullanıcıya kaydet
+                    user.languages_known = json.dumps(cv_analysis['languages'], ensure_ascii=False)
+                    
+                    # Dilleri ve seviyeleri ayrı ayrı kaydet
+                    if 'languages_list' in cv_analysis:
+                        user.known_languages = cv_analysis['languages_list']
+                    
+                    if 'levels_summary' in cv_analysis:
+                        user.language_levels = json.dumps(cv_analysis['levels_summary'], ensure_ascii=False)
+                    
+                    # 🎯 CV ANALİZİ SONRASI GELİŞTİRİCİ ROLÜ ATA
+                    if 'developer' not in user.user_type:
+                        user.user_type.append('developer')
+                        print(f"✅ CV analizi sonrası developer rolü eklendi: {user.email}")
+                    
+                    user.save()
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'CV analizi başarılı! Geliştirici rolü atandı. Artık projelere katılabilirsiniz!',
+                        'cv_name': cv_name,
+                        'id_name': id_full_name,
+                        'languages_analysis': cv_analysis['languages'],
+                        'known_languages': cv_analysis.get('languages_list', []),
+                        'language_levels': cv_analysis.get('levels_summary', {}),
+                        'role_assigned': 'developer',
+                        'new_user_type': user.user_type,
+                        'process_completed': True,
+                        'gemini_analysis': True
+                    })
+                else:
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'CV doğrulandı fakat Gemini analizi yapılamadı.',
+                        'cv_name': cv_name,
+                        'id_name': id_full_name,
+                        'analysis_error': cv_analysis.get('error', 'Bilinmeyen hata'),
+                        'gemini_analysis': False
+                    })
             else:
+                # Eşleşmiyor
                 return JsonResponse({
-                    'success': True,
-                    'message': 'CV doğrulandı fakat dil analizi yapılamadı.',
+                    'success': False,
+                    'error': 'CV\'deki ad-soyad kimlikle eşleşmiyor. Lütfen kendi CV\'nizi yükleyin.',
                     'cv_name': cv_name,
-                    'id_name': id_full_name,
-                    'analysis_error': cv_analysis.get('error', 'Bilinmeyen hata')
+                    'id_name': id_full_name
                 })
-        else:
-            # Eşleşmiyor
+                
+        except Exception as e:
+            print(f"CV yükleme hatası: {str(e)}")
+            import traceback
+            print(f"Hata detayı: {traceback.format_exc()}")
             return JsonResponse({
-                'success': False,
-                'error': 'CV\'deki ad-soyad kimlikle eşleşmiyor. Lütfen kendi CV\'nizi yükleyin.',
-                'cv_name': cv_name,
-                'id_name': id_full_name
-            })
+                'error': 'CV yükleme hatası',
+                'details': str(e),
+                'traceback': traceback.format_exc()
+            }, status=500)
     
     return JsonResponse({'error': 'Sadece POST isteği desteklenir.'}, status=405)
 
@@ -1812,4 +1848,79 @@ def list_users(request):
         return JsonResponse({
             "status": "error",
             "message": f"Kullanıcı listesi alınırken hata: {str(e)}"
+        }, status=500)
+
+def test_developer_process(request):
+    """Geliştirici sürecini test eder"""
+    try:
+        user = get_user_from_token(request)
+        if not user:
+            return JsonResponse({'error': 'Geçersiz token'}, status=401)
+        
+        # Kullanıcının durumunu kontrol et
+        status = {
+            "email": user.email,
+            "full_name": user.full_name,
+            "user_type": user.user_type,
+            "identity_verified": getattr(user, 'identity_verified', False),
+            "cv_verified": getattr(user, 'cv_verified', False),
+            "verified_name": getattr(user, 'verified_name', None),
+            "verified_surname": getattr(user, 'verified_surname', None),
+            "languages_known": getattr(user, 'languages_known', None),
+            "known_languages": getattr(user, 'known_languages', []),
+            "is_developer": 'developer' in user.user_type,
+            "process_completed": False
+        }
+        
+        # Geliştirici süreci tamamlanmış mı?
+        if status["identity_verified"] and status["cv_verified"] and status["is_developer"]:
+            status["process_completed"] = True
+            status["message"] = "✅ Geliştirici süreci tamamlandı! Projelere katılabilirsiniz."
+        elif status["identity_verified"] and not status["cv_verified"]:
+            status["message"] = "⏳ Kimlik doğrulandı! Şimdi CV yükleyerek geliştirici olabilirsiniz."
+        elif not status["identity_verified"]:
+            status["message"] = "⏳ Önce kimlik doğrulaması yapmanız gerekiyor"
+        
+        return JsonResponse({
+            "status": "success",
+            "developer_process": status
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": f"Test hatası: {str(e)}"
+        }, status=500)
+
+def test_id_verification(request):
+    """Kimlik doğrulama test endpoint'i"""
+    try:
+        user = get_user_from_token(request)
+        if not user:
+            return JsonResponse({'error': 'Geçersiz token'}, status=401)
+        
+        # Kullanıcının kimlik durumunu kontrol et
+        status = {
+            "email": user.email,
+            "identity_verified": getattr(user, 'identity_verified', False),
+            "verified_name": getattr(user, 'verified_name', None),
+            "verified_surname": getattr(user, 'verified_surname', None),
+            "tc_verified": getattr(user, 'tc_verified', None),
+            "message": ""
+        }
+        
+        if status["identity_verified"]:
+            status["message"] = f"✅ Kimlik doğrulandı: {status['verified_name']} {status['verified_surname']}"
+        else:
+            status["message"] = "⏳ Kimlik doğrulaması yapılmamış"
+        
+        return JsonResponse({
+            "status": "success",
+            "identity_status": status
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": f"Test hatası: {str(e)}"
         }, status=500)
