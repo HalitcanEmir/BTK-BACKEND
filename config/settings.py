@@ -89,28 +89,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 MONGODB_HOST = os.environ.get('MONGODB_HOST', 'localhost')
 MONGODB_NAME = os.environ.get('MONGODB_NAME', 'btk_backend')
 
-# Debug için environment variable'ları yazdır
-print(f"Environment MONGODB_HOST: {os.environ.get('MONGODB_HOST')}")
-print(f"Environment MONGODB_NAME: {os.environ.get('MONGODB_NAME')}")
-
-# MongoDB Atlas bağlantısı - Zorla Atlas'a bağlan
+# MongoDB Atlas bağlantısı
 try:
     from mongoengine import connect
     
     # Atlas connection string'ini environment variable'dan al
     atlas_connection_string = os.environ.get('MONGODB_HOST', "mongodb+srv://halitcanemir06:1591235He@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0")
     
-    print(f"Atlas connection string: {atlas_connection_string[:50]}...")
-    print("MongoDB Atlas'a bağlanıyor...")
-    
     # Atlas'a doğrudan bağlan
     connect(host=atlas_connection_string, serverSelectionTimeoutMS=10000, connectTimeoutMS=10000)
-    print("✅ MongoDB Atlas bağlantısı başarılı!")
     
 except Exception as e:
-    print(f"❌ MongoDB Atlas bağlantı hatası: {e}")
-    print(f"Hata detayı: {type(e).__name__}")
     # Hata durumunda uygulama çalışmaya devam etsin
+    pass
 
 # Gemini AI API Key
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q')
