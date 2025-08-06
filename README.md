@@ -1,6 +1,6 @@
 # BTK Backend - MongoDB Atlas Integration
 
-Bu proje, BTK (Bilim ve Teknoloji Kurumu) için geliştirilmiş bir backend API'sidir. MongoDB Atlas bulut veritabanı kullanılarak geliştirilmiştir.
+Bu proje, BTK Hackathon 2025 için geliştirilmiş bir backend API'sidir. Django framework ve MongoDB veritabanı kullanılarak geliştirilmiştir.
 
 ## 🚀 Özellikler
 
