@@ -14,10 +14,8 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
-      - key: MONGODB_NAME
-        value: btkdb
-      - key: MONGODB_HOST
-        value: mongodb+srv://halitcanemir06:1591235He@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0
+      - key: MONGODB_URI
+        value: mongodb+srv://halitcanemir06:KlEyOuJx70Cwlg70@cluster0.eqsstlg.mongodb.net/btkdb?retryWrites=true&w=majority&appName=Cluster0
       - key: GEMINI_API_KEY
         value: AIzaSyCbCKfQbDi8_qsBNMcaFBly8RppdrV791Q
       - key: SMTP_SERVER

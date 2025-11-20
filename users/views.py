@@ -1,4 +1,3 @@
-from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.http import JsonResponse
@@ -7,11 +6,8 @@ from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
-from django.contrib.auth.decorators import login_required
 import jwt
 import json
-import base64
-import os
 import re
 from .models import User, EmailVerification, PasswordReset, FriendRequest
 from .utils import hash_password, check_password, analyze_id_card, scrape_linkedin_profile, analyze_linkedin_profile, verify_identity_match, generate_verification_code, send_verification_email, send_welcome_email, send_password_reset_email, send_image_to_gemini, extract_text_from_pdf, detect_name_from_cv, compare_names, analyze_cv_with_gemini
@@ -107,7 +103,6 @@ def login(request):
         'full_name': user.full_name,
         'user_type': user.user_type,
         'github_verified': user.github_verified,
-        'linkedin_verified': user.linkedin_verified,
         'can_invest': user.can_invest,
         'created_at': str(user.created_at)
     }
@@ -128,7 +123,6 @@ def register(request):
         full_name = data.get('full_name', '').strip()
         user_type = data.get('user_type', [])
         github_token = data.get('github_token')
-        linkedin_token = data.get('linkedin_token')
         card_token = data.get('card_token')
     except Exception:
         return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'})
@@ -152,7 +146,7 @@ def register(request):
     
     # Email doğrulama kodu oluştur ve gönder
     verification_code = generate_verification_code()
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    expires_at = datetime.utcnow() + timedelta(minutes=5)
     
     # Veritabanına kaydet
     verification = EmailVerification(
@@ -192,7 +186,7 @@ def register(request):
 # GET /api/auth/verify-email
 # Açıklama: E-posta doğrulama endpointi
 
-from django.views.decorators.csrf import csrf_exempt
+
 
 @csrf_exempt
 def reset_password_request(request):
@@ -220,11 +214,6 @@ def reset_password_request(request):
 def verify_email(request):
     return JsonResponse({"message": "E-posta Doğrulama"})
 
-# Şifre Sıfırlama
-# POST /api/auth/reset-password
-# Açıklama: Şifre sıfırlama endpointi
-def reset_password(request):
-    return JsonResponse({"message": "Şifre Sıfırlama"})
 
 # Kendi Profilim
 # GET /api/users/me
@@ -248,7 +237,6 @@ def my_profile(request):
         "identity_verified": user.identity_verified,
         "cv_verified": getattr(user, 'cv_verified', False),
         "github_verified": user.github_verified,
-        "linkedin_verified": user.linkedin_verified,
         "can_invest": user.can_invest,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
@@ -500,128 +488,9 @@ def verify_identity(request):
             'error': str(e)
         }, status=500)
     
-    # 2. LinkedIn profil analizi
-    try:
-        print(f"🔗 LINKEDIN ANALİZİ BAŞLATILIYOR...")
-        print(f"🌐 LinkedIn URL: {linkedin_url}")
-        
-        linkedin_data = scrape_linkedin_profile(linkedin_url)
-        
-        print(f"📊 LinkedIn Analiz Sonucu: {linkedin_data}")
-        
-        if linkedin_data['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'LinkedIn analizi başarısız',
-                'details': linkedin_data.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        linkedin_name = linkedin_data.get('name')
-        linkedin_summary = linkedin_data.get('summary', '')
-        
-        print(f"👤 LinkedIn'den çıkarılan: {linkedin_name}")
-        
-    except Exception as e:
-        print(f"❌ LinkedIn analizi hatası: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': 'LinkedIn analizi hatası',
-            'error': str(e)
-        }, status=500)
     
-    # 3. Kimlik-LinkedIn eşleşme kontrolü
-    try:
-        match_result = verify_identity_match(id_name, id_surname, linkedin_name)
-        
-        if match_result['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Eşleşme kontrolü başarısız',
-                'details': match_result.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        if not match_result['match']:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Kimlik adınız ile LinkedIn adınız eşleşmiyor',
-                'id_name': f"{id_name} {id_surname}",
-                'linkedin_name': linkedin_name
-            }, status=400)
-        
-    except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'Eşleşme kontrolü hatası',
-            'error': str(e)
-        }, status=500)
     
-    # 4. LinkedIn profil AI analizi
-    try:
-        profile_data = {
-            'name': linkedin_name,
-            'summary': linkedin_summary
-        }
-        
-        ai_analysis = analyze_linkedin_profile(profile_data)
-        
-        if ai_analysis['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'LinkedIn AI analizi başarısız',
-                'details': ai_analysis.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        technical_analysis = ai_analysis.get('analysis', {})
-        
-    except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'LinkedIn AI analizi hatası',
-            'error': str(e)
-        }, status=500)
     
-    # 5. Kullanıcı bilgilerini güncelle
-    try:
-        user.id_card_image_url = f"id_cards/{user.id}.jpg"  # Güvenli URL
-        user.verified_name = id_name
-        user.verified_surname = id_surname
-        user.identity_verified = True
-        
-        user.linkedin_url = linkedin_url
-        user.linkedin_name = linkedin_name
-        user.linkedin_verified = True
-        
-        user.languages_known = json.dumps(technical_analysis.get('skills', {}))
-        user.experience_estimate = technical_analysis.get('experience_estimate', '')
-        user.profile_summary = technical_analysis.get('summary', '')
-        user.technical_analysis = json.dumps(technical_analysis)
-        
-        user.verification_status = 'verified'
-        user.verification_notes = f"Kimlik-LinkedIn eşleşmesi: {match_result['confidence']} güven"
-        
-        user.save()
-        
-    except Exception as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'Kullanıcı bilgileri güncellenemedi',
-            'error': str(e)
-        }, status=500)
-    
-    # 6. Başarılı yanıt
-    return JsonResponse({
-        'status': 'ok',
-        'message': 'Kimlik doğrulama başarılı',
-        'verification': {
-            'identity_verified': True,
-            'linkedin_verified': True,
-            'match_confidence': match_result['confidence'],
-            'id_name': f"{id_name} {id_surname}",
-            'linkedin_name': linkedin_name,
-            'experience_estimate': technical_analysis.get('experience_estimate', ''),
-            'skills_count': len(technical_analysis.get('skills', {}))
-        }
-    })
 
 # POST /api/auth/verify-id-card
 # Açıklama: Sadece kimlik kartı analizi
@@ -755,137 +624,7 @@ def verify_id_card(request):
             'error': str(e)
         }, status=500)
 
-# POST /api/auth/verify-linkedin
-# Açıklama: LinkedIn doğrulama (kimlik doğrulandıktan sonra)
-@csrf_exempt
-def verify_linkedin(request):
-    if request.method != 'POST':
-        return JsonResponse({'status': 'error', 'message': 'POST olmalı'}, status=405)
-    
-    print("🚀 VERIFY LINKEDIN ENDPOINT ÇAĞRILDI!")
-    
-    user = get_user_from_jwt(request)
-    if not user:
-        print("❌ Kullanıcı bulunamadı")
-        return JsonResponse({'status': 'error', 'message': 'Giriş yapmalısınız'}, status=401)
-    
-    print(f"✅ Kullanıcı bulundu: {user.email}")
-    
-    # Kimlik doğrulaması kontrol et
-    if not getattr(user, 'identity_verified', False):
-        return JsonResponse({
-            'status': 'error', 
-            'message': 'Önce kimlik doğrulaması yapmalısınız'
-        }, status=400)
-    
-    try:
-        data = json.loads(request.body)
-        linkedin_url = data.get('linkedin_url')
-    except Exception as e:
-        print(f"❌ JSON parse hatası: {e}")
-        return JsonResponse({'status': 'error', 'message': 'Geçersiz JSON'}, status=400)
-    
-    if not linkedin_url:
-        return JsonResponse({'status': 'error', 'message': 'LinkedIn URL gerekli'}, status=400)
-    
-    # LinkedIn profil analizi
-    try:
-        print(f"🔗 LINKEDIN ANALİZİ BAŞLATILIYOR...")
-        print(f"🌐 LinkedIn URL: {linkedin_url}")
-        
-        linkedin_data = scrape_linkedin_profile(linkedin_url)
-        
-        print(f"📊 LinkedIn Analiz Sonucu: {linkedin_data}")
-        
-        if linkedin_data['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'LinkedIn analizi başarısız',
-                'details': linkedin_data.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        linkedin_name = linkedin_data.get('name')
-        linkedin_summary = linkedin_data.get('summary', '')
-        
-        print(f"👤 LinkedIn'den çıkarılan: {linkedin_name}")
-        
-        # Kimlik-LinkedIn eşleşme kontrolü
-        id_name = getattr(user, 'verified_name', '')
-        id_surname = getattr(user, 'verified_surname', '')
-        
-        match_result = verify_identity_match(id_name, id_surname, linkedin_name)
-        
-        print(f"🔍 Eşleşme kontrolü: {match_result}")
-        
-        if match_result['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Eşleşme kontrolü başarısız',
-                'details': match_result.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        if not match_result['match']:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Kimlik adınız ile LinkedIn adınız eşleşmiyor',
-                'id_name': f"{id_name} {id_surname}",
-                'linkedin_name': linkedin_name
-            }, status=400)
-        
-        # LinkedIn profil AI analizi
-        profile_data = {
-            'name': linkedin_name,
-            'summary': linkedin_summary
-        }
-        
-        ai_analysis = analyze_linkedin_profile(profile_data)
-        
-        if ai_analysis['status'] != 'success':
-            return JsonResponse({
-                'status': 'error',
-                'message': 'LinkedIn AI analizi başarısız',
-                'details': ai_analysis.get('message', 'Bilinmeyen hata')
-            }, status=400)
-        
-        technical_analysis = ai_analysis.get('analysis', {})
-        
-        # Kullanıcı bilgilerini güncelle
-        user.linkedin_url = linkedin_url
-        user.linkedin_name = linkedin_name
-        user.linkedin_verified = True
-        
-        user.languages_known = json.dumps(technical_analysis.get('skills', {}))
-        user.experience_estimate = technical_analysis.get('experience_estimate', '')
-        user.profile_summary = technical_analysis.get('summary', '')
-        user.technical_analysis = json.dumps(technical_analysis)
-        
-        user.verification_status = 'verified'
-        user.verification_notes = f"Tam doğrulama: Kimlik-LinkedIn eşleşmesi: {match_result['confidence']} güven"
-        
-        user.save()
-        
-        return JsonResponse({
-            'status': 'ok',
-            'message': 'LinkedIn doğrulama başarılı',
-            'verification': {
-                'identity_verified': True,
-                'linkedin_verified': True,
-                'match_confidence': match_result['confidence'],
-                'id_name': f"{id_name} {id_surname}",
-                'linkedin_name': linkedin_name,
-                'experience_estimate': technical_analysis.get('experience_estimate', ''),
-                'skills_count': len(technical_analysis.get('skills', {}))
-            }
-        })
-        
-    except Exception as e:
-        print(f"❌ LinkedIn analizi hatası: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': 'LinkedIn analizi hatası',
-            'error': str(e)
-        }, status=500)
-
+#
 # GET /api/auth/verification-status
 # Açıklama: Kullanıcının doğrulama durumunu getirir
 @csrf_exempt
@@ -1250,15 +989,7 @@ def send_verification_code(request):
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
         return JsonResponse({"status": "error", "message": "Geçersiz email formatı"}, status=400)
-    
-    # Email zaten kayıtlı mı kontrol et - KALDIRILDI
-    # existing_user = User.objects(email=email).first()
-    # if existing_user:
-    #     return JsonResponse({"status": "error", "message": "Bu email adresi zaten kayıtlı"}, status=400)
-    
-    # Eski doğrulama kodlarını temizle - KALDIRILDI
-    # EmailVerification.objects(email=email, is_used=False).delete()
-    
+
     # Yeni doğrulama kodu oluştur
     verification_code = generate_verification_code()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
@@ -1389,14 +1120,6 @@ def resend_verification_code(request):
     
     if not email:
         return JsonResponse({"status": "error", "message": "Email adresi gerekli"}, status=400)
-    
-    # Kullanıcı zaten kayıtlı mı kontrol et - KALDIRILDI
-    # existing_user = User.objects(email=email).first()
-    # if existing_user:
-    #     return JsonResponse({"status": "error", "message": "Bu email adresi zaten kayıtlı"}, status=400)
-    
-    # Eski doğrulama kodlarını temizle - KALDIRILDI
-    # EmailVerification.objects(email=email, is_used=False).delete()
     
     # Yeni kod oluştur
     verification_code = generate_verification_code()
